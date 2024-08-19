@@ -1,15 +1,20 @@
 # pine
+
 Simple Go server framework built on the same concepts of ease of use such as Fiber golang or Express JS
 
 <!-- GETTING STARTED -->
+
 ## Getting Started
+
 To get started you will need to import the go module by typing
-* go
+
+- go
   ```sh
   go get github.com/BryanMwangi/pine
   ```
 
 ## Quick start
+
 Getting started with pine is easy. Here's a basic example to create a simple web server that responds with "Hello, World!" on the root path.
 
 ```go
@@ -35,7 +40,8 @@ func main() {
 }
 ```
 
-
 <!-- CONTRIBUTING -->
+
 ## Contributing
+
 This version of pine is still very beta and improvements are definetly on their way. If you find a feature missing on pine and would like to add to it, please feel free to open a PR and we can definetly work together on it.
