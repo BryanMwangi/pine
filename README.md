@@ -27,11 +27,11 @@ import (
 )
 
 func main() {
-    // Initialize a new Fiber app
+    // Initialize a new Pine app
     app := pine.New()
 
     // Define a route for the GET method on the root path '/hello'
-    app.Get("/hello", func(c fiber.Ctx) error {
+    app.Get("/hello", func(c pine.Ctx) error {
         return c.SendString("Hello, World!")
     })
 
