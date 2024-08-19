@@ -32,7 +32,7 @@ func main() {
 
     // Define a route for the GET method on the root path '/hello'
     app.Get("/hello", func(c pine.Ctx) error {
-        return c.SendString("Hello, World!")
+        return c.SendString("Hello World!")
     })
 
     // Start the server on port 3000
