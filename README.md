@@ -31,7 +31,7 @@ func main() {
     app := pine.New()
 
     // Define a route for the GET method on the root path '/hello'
-    app.Get("/hello", func(c pine.Ctx) error {
+    app.Get("/hello", func(c *pine.Ctx) error {
         return c.SendString("Hello World!")
     })
 
