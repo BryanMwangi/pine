@@ -110,6 +110,10 @@ func Error(message interface{}) {
 	log.Println("ERROR: " + message.(string))
 }
 
+func RuntimeError(message interface{}) {
+	fmt.Println(Red + message.(string) + Reset)
+}
+
 func Warning(message interface{}) {
 	fmt.Println(Yellow + message.(string) + Reset)
 	log.Println("WARN : " + message.(string))

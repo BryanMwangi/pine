@@ -755,9 +755,15 @@ func (server *Server) startBackgroundTask(task BackgroundTask) {
 		err := task.Fn()
 		if err != nil {
 			server.errorQueue <- err
-			logger.Error(err.Error())
-			server.removeTaskByID(task.id) // Remove the task if it fails
-			return                         // Exit the goroutine to stop the task
+			// Log the error
+			logger.RuntimeError("Error in background task")
+			logger.RuntimeError(getFunctionName(task.Fn))
+			logger.RuntimeError(err.Error())
+
+			// Remove the task if it fails
+			server.removeTaskByID(task.id)
+			// Exit the goroutine to stop the task
+			break
 		}
 
 		// Respect the delay specified by the task
