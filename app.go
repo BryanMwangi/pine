@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/BryanMwangi/pine/logger"
+	"github.com/google/uuid"
 )
 
 type Ctx struct {
@@ -48,20 +51,28 @@ type Server struct {
 	config Config
 
 	//an array of registered routes when the server starts
-	// the route stack is divided by HTTP methods and route prefixes
+	//the route stack is divided by HTTP methods and route prefixes
 	stack [][]*Route
 
 	//in case you want to serve https out of the box
-	// you can set this to an empty string when you start a new server by
-	// doing app:=pine.New(":3000","","")
+	//you can set this to an empty string when you start a new server by
+	//doing app:=pine.New(":3000","","")
 	//this will default the server to http
 	CertFile string
 
 	//in case you want to serve https out of the box
-	// you can set this to an empty string when you start a new server by
-	// doing app:=pine.New(":3000","","")
+	//you can set this to an empty string when you start a new server by
+	//doing app:=pine.New(":3000","","")
 	//this will default the server to http
 	KeyFile string
+
+	// a slice of background tasks
+	//these are executed in the background infinitely
+	tasks []BackgroundTask
+
+	//queue for errors ensures that errors are not lost
+	//if errors persist more than 3 times the background tasks will be stopped
+	errorQueue chan error
 }
 
 // Config is a struct holding the server settings.
@@ -86,6 +97,15 @@ type Config struct {
 	//
 	// Default: unlimited
 	WriteTimeout time.Duration `json:"write_timeout"`
+
+	//This is the periodic time in which the server can execute
+	//background tasks background tasks can run infinitely
+	//as long as the server is running
+	//for example you can use this to make requests to other servers
+	//or update your database
+	//
+	// Default: 5 minutes
+	BackgroundTimeout time.Duration `json:"background_timeout"`
 
 	// When set to true, disables keep-alive connections.
 	// The server will close incoming connections after sending the first response to client.
@@ -116,6 +136,9 @@ type Config struct {
 	//
 	// Optional. Default: DefaultMethods
 	RequestMethods []string
+
+	// Client is used to make requests to other servers
+	Client *http.Client
 }
 
 // Route is a struct that holds all metadata for each registered handler.
@@ -128,6 +151,22 @@ type Route struct {
 	Path string `json:"path"`
 	// Ctx handlers
 	Handlers []Handler `json:"-"`
+}
+
+// This is the structure of a background task
+// you can use this to put whatever tasks you want to perform
+// in the background as the server runs and Pine will take care of executing
+// them in the background
+//
+// time is optional and defaults to 5 minutes according to the server configuration
+//
+// Fn is the function that will be executed
+// It should always return an error as the error is what will be used
+// to delete the task from the queue
+type BackgroundTask struct {
+	id   uuid.UUID
+	Fn   func() error
+	Time time.Duration
 }
 
 // cookie struct that defines the structure of a cookie
@@ -202,6 +241,7 @@ const (
 	DefaultBodyLimit = 4 * 1024 * 1024
 	statusMessageMin = 100
 	statusMessageMax = 511
+	queueCapacity    = 100
 )
 
 // Acceptable methods
@@ -254,6 +294,7 @@ func New(config ...Config) *Server {
 		BodyLimit:         DefaultBodyLimit,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      5 * time.Second,
+		BackgroundTimeout: 5 * time.Minute,
 		DisableKeepAlive:  false,
 		JSONEncoder:       json.Marshal,
 		JSONDecoder:       json.Unmarshal,
@@ -262,13 +303,49 @@ func New(config ...Config) *Server {
 	}
 
 	if len(config) > 0 {
-		cfg = config[0]
+		//we only use the first config in the array
+		userConfig := config[0]
+		// Overwrite the default config with the user config
+		if userConfig.BodyLimit != 0 {
+			cfg.BodyLimit = userConfig.BodyLimit
+		}
+		if userConfig.ReadTimeout != 0 {
+			cfg.ReadTimeout = userConfig.ReadTimeout
+		}
+		if userConfig.WriteTimeout != 0 {
+			cfg.WriteTimeout = userConfig.WriteTimeout
+		}
+		if userConfig.BackgroundTimeout != 0 {
+			cfg.BackgroundTimeout = userConfig.BackgroundTimeout
+		}
+		if userConfig.DisableKeepAlive {
+			cfg.DisableKeepAlive = userConfig.DisableKeepAlive
+		}
+		if userConfig.JSONEncoder != nil {
+			cfg.JSONEncoder = userConfig.JSONEncoder
+		}
+		if userConfig.JSONDecoder != nil {
+			cfg.JSONDecoder = userConfig.JSONDecoder
+		}
+		if userConfig.StreamRequestBody {
+			cfg.StreamRequestBody = userConfig.StreamRequestBody
+		}
+		if userConfig.RequestMethods != nil {
+			cfg.RequestMethods = userConfig.RequestMethods
+		}
+		if userConfig.RequestMethods != nil {
+			cfg.RequestMethods = userConfig.RequestMethods
+		}
+		if userConfig.Client != nil {
+			cfg.Client = userConfig.Client
+		}
 	}
 
 	server := &Server{
-		config:   cfg,
-		stack:    make([][]*Route, len(cfg.RequestMethods)),
-		errorLog: log.New(os.Stderr, "ERROR: ", log.LstdFlags),
+		config:     cfg,
+		stack:      make([][]*Route, len(cfg.RequestMethods)),
+		errorLog:   log.New(os.Stderr, "ERROR: ", log.LstdFlags),
+		errorQueue: make(chan error, queueCapacity),
 	}
 
 	return server
@@ -345,41 +422,10 @@ func (server *Server) Delete(path string, handlers ...Handler) {
 	server.AddRoute(MethodPost, path, handlers...)
 }
 
-//Called to start the server after creating a new server
-//You can put this in a go routine to handle graceful shut downs
-//Example:
+// Called to start the server after creating a new server
 //
-// go func() {
-// 		// Listen on the specified port and send the error to the channel
-// 		//certFile and Keyfile is optional
-// 		ch <- app.Start(":3000", "", "")
-// 	}()
-// 	select {
-// 	case <-ctx.Done():
-// 		log.Println("Server shutting down gracefully...")
-// 		timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 		defer cancel()
-//		//you need to defined your own gracefulShutdown function where you can add
-//		//your own logic for example closing database connections
-// 		err := gracefulShutdown(timeout)
-// 		if err != nil {
-// 			log.Println("error shutting down clients")
-// 		}
-
-// 		// Close the Fiber app and send shutdown signal
-// 		if err := app.ServeShutDown(ctx); err != nil {
-// 			log.Println("Error during shutdown " , err)
-// 		}
-// 	case err := <-ch:
-// 		// Server exited with an error
-// 		if err != nil {
-// 			log.Println("Error starting server: " , err)
-// 		}
-// 	}
-
-//		close(ch)
-//		log.Println("Server stopped")
-//	}
+// You can put this in a go routine to handle graceful shut downs
+// You can check out an example on https://github/BryanMwangi/pine/Examples/RunningInGoRoutine/main.go
 func (server *Server) Start(address string, CertFile, KeyFile string) error {
 	httpServer := &http.Server{
 		Addr:         address,
@@ -389,6 +435,13 @@ func (server *Server) Start(address string, CertFile, KeyFile string) error {
 	}
 
 	server.server = httpServer
+
+	//we first check if the user registered any background tasks
+	//we start the background tasks in a separate goroutine
+	//this is to prevent blocking the main goroutine
+	if len(server.tasks) > 0 {
+		go server.processQueue()
+	}
 	//certfile and keyfile are needed to handle https connections
 	//if the certfile and keyfile are not empty strings the server will default to http
 	if CertFile != "" && KeyFile != "" {
@@ -551,6 +604,29 @@ func parseCookies(cookieHeader string) map[string]Cookie {
 	return cookies
 }
 
+// This function is used to delete cookies
+// You can pass multiple names of cookies to be deleted at once
+func (c *Ctx) DeleteCookie(names ...string) error {
+	cookies := []Cookie{}
+	for _, name := range names {
+		cookie := Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: 0,
+		}
+		cookies = append(cookies, cookie)
+	}
+	err := c.SetCookie(cookies...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // This can be used to set the local  values of a request
 // This is particulary usefule when unpacking data from a cookie
 // Eg: You can parse a JWT token and decode the data inside it
@@ -636,6 +712,67 @@ func (c *Ctx) SendStatus(status int) error {
 	}
 
 	return nil
+}
+
+// this is used to act make the server act as a client
+// the server can be used to make requests to other servers
+func (server *Server) Client() *http.Client {
+	return &http.Client{
+		Timeout: server.config.ReadTimeout,
+	}
+}
+
+// AddQueue is used put some functions in a queue that can be executed
+// in the background for a specified period of time
+// This is particularly useful for making requests to other servers
+// or for performing some other background task
+//
+// You can add as many tasks as you want to the queue
+// however the please be mindful of the queue size as it will impact the performance
+// check out examples at https://github.com/BryanMwangi/pine/tree/main/Examples/BackgroundTask/main.go
+func (server *Server) AddQueue(tasks ...BackgroundTask) {
+	var createdTasks []BackgroundTask
+	for _, task := range tasks {
+		task.id = uuid.New()
+		createdTasks = append(createdTasks, task)
+	}
+	server.tasks = createdTasks
+}
+
+// Helper function to remove a task by its ID
+func (server *Server) removeTaskByID(id uuid.UUID) {
+	for i, task := range server.tasks {
+		if task.id == id {
+			server.tasks = append(server.tasks[:i], server.tasks[i+1:]...)
+			return
+		}
+	}
+}
+
+func (server *Server) startBackgroundTask(task BackgroundTask) {
+	for {
+		// Execute the task function
+		err := task.Fn()
+		if err != nil {
+			server.errorQueue <- err
+			logger.Error(err.Error())
+			server.removeTaskByID(task.id) // Remove the task if it fails
+			return                         // Exit the goroutine to stop the task
+		}
+
+		// Respect the delay specified by the task
+		if task.Time > 0 {
+			time.Sleep(task.Time)
+		} else {
+			time.Sleep(server.config.BackgroundTimeout)
+		}
+	}
+}
+
+func (server *Server) processQueue() {
+	for _, task := range server.tasks {
+		go server.startBackgroundTask(task) // Start the background task
+	}
 }
 
 func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error {
