@@ -219,6 +219,12 @@ type Cookie struct {
 	//if you want all domains associated with example.com you can set this to
 	//*.example.com
 	//Now both app.example.com or dev.example.com can use the same cookie
+	//
+	//Options include the following:
+	// 0 - SameSite=Lax
+	// 1 - SameSite=Strict
+	// 2 - SameSite=None
+	//It will alwas default to Lax
 	SameSite SameSite
 	//All cookie data in string format. You do not need to set this
 	//Pine can handle it for you
