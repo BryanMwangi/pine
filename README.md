@@ -60,18 +60,18 @@ https://github.com/user-attachments/assets/a3ef09b1-4f2f-48e9-ae74-04a4bd47a95b
 
 The results show that Pine is the fastest of the three frameworks tested. It is also the most performant of the three, with an average latency of 1.328 ms and a slowest latency of 19.07125 ms.
 
+## Limitations
+
+- No support for websockets out of the box
+- No support for file uploads out of the box
+- No support for sessions out of the box
+
 ## Advantages
 
 - Built on top of the standard net/http library. You can easily integrate pine with other features of the standard library without having to rewrite your code.
 - Built on top of the standard context.Context. This allows for easy integration with other libraries such as database connections.
 - Supports middleware
 - Supports background tasks managed by Pine's runtime scheduler
-
-## Limitations
-
-- No support for websockets out of the box
-- No support for file uploads out of the box
-- No support for sessions out of the box
 
 ### Background tasks example
 
