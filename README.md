@@ -56,7 +56,9 @@ Fun fact, by the time the Express benchmarks were finished, we had run the Pine 
 | Pine      | 77229        | 1.328 ms    | 19.07125 ms |
 | Fiber     | 73959        | 1.302 ms    | 50.50235 ms |
 
-<video src="https://github.com/BryanMwangi/pine/blob/main/Benchmarks/benchmark.mp4" width="100%" controls></video>
+<p float="left" align="middle">
+<video src="https://github.com/BryanMwangi/pine/blob/main/Benchmarks/benchmark.mp4" width="100%" controls>
+</p>
 
 The results show that Pine is the fastest of the three frameworks tested. It is also the most performant of the three, with an average latency of 1.328 ms and a slowest latency of 19.07125 ms.
 
