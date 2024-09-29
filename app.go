@@ -259,13 +259,14 @@ const (
 // Acceptable methods
 // these are the default at the moment, more coming soon
 const (
-	MethodGet    = "GET"
-	MethodPost   = "POST"
-	MethodPut    = "PUT"
-	MethodDelete = "DELETE"
-	MethodPatch  = "PATCH"
-	MethodHead   = "HEAD"
-	methodUse    = "USE"
+	MethodGet     = "GET"
+	MethodPost    = "POST"
+	MethodPut     = "PUT"
+	MethodDelete  = "DELETE"
+	MethodPatch   = "PATCH"
+	MethodHead    = "HEAD"
+	MethodOptions = "OPTIONS"
+	methodUse     = "USE"
 )
 
 // int equivalent of the mothod
@@ -284,6 +285,8 @@ func (server *Server) methodInt(s string) int {
 		return 4
 	case MethodPatch:
 		return 5
+	case MethodOptions:
+		return 6
 	default:
 		return -1
 	}

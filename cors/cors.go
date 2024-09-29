@@ -1,6 +1,8 @@
 package cors
 
 import (
+	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/BryanMwangi/pine"
@@ -140,6 +142,11 @@ func New(config ...Config) pine.Middleware {
 
 	return func(next pine.Handler) pine.Handler {
 		return func(c *pine.Ctx) error {
+			fmt.Println(c.Method)
+			if c.Method == http.MethodOptions {
+				c = SetCors(c, cfg)
+				return c.SendStatus(http.StatusNoContent)
+			}
 			c = SetCors(c, cfg)
 			return next(c)
 		}
@@ -149,11 +156,13 @@ func New(config ...Config) pine.Middleware {
 func SetCors(c *pine.Ctx, cfg Config) *pine.Ctx {
 	allowedOrigins := strings.Join(cfg.AllowedOrigins, ",")
 	allowedMethods := strings.Join(cfg.AllowedMethods, ",")
+	exposeHeaders := strings.TrimSpace(cfg.ExposedHeaders)
+	allowHeaders := strings.TrimSpace(cfg.AllowedHeaders)
 
 	c.Set("Access-Control-Allow-Origin", allowedOrigins)
 	c.Set("Access-Control-Allow-Methods", allowedMethods)
-	c.Set("Access-Control-Allow-Headers", cfg.AllowedHeaders)
-	c.Set("Access-Control-Expose-Headers", cfg.ExposedHeaders)
+	c.Set("Access-Control-Allow-Headers", allowHeaders)
+	c.Set("Access-Control-Expose-Headers", exposeHeaders)
 	c.Set("Access-Control-Max-Age", cfg.MaxAge)
 	return c
 }

@@ -12,7 +12,7 @@ func main() {
 	app := pine.New()
 	app.Use(cors.New())
 
-	app.Get("/hello", func(c *pine.Ctx) error {
+	app.Post("/hello", func(c *pine.Ctx) error {
 		return c.JSON(
 			map[string]string{
 				"message": "Hello World!",
