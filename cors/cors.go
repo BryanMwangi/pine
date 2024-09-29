@@ -1,7 +1,6 @@
 package cors
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -142,7 +141,6 @@ func New(config ...Config) pine.Middleware {
 
 	return func(next pine.Handler) pine.Handler {
 		return func(c *pine.Ctx) error {
-			fmt.Println(c.Method)
 			if c.Method == http.MethodOptions {
 				c = SetCors(c, cfg)
 				return c.SendStatus(http.StatusNoContent)
