@@ -884,7 +884,7 @@ func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error 
 
 func (rw *responseWriterWrapper) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
-	rw.ResponseWriter.Header().Set("Status Code", strconv.Itoa(statusCode))
+	rw.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (rw *responseWriterWrapper) SetHeader(key, val string) {

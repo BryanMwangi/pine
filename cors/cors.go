@@ -141,6 +141,7 @@ func New(config ...Config) pine.Middleware {
 
 	return func(next pine.Handler) pine.Handler {
 		return func(c *pine.Ctx) error {
+			// preflight request
 			if c.Method == http.MethodOptions {
 				c = SetCors(c, cfg)
 				return c.SendStatus(http.StatusNoContent)

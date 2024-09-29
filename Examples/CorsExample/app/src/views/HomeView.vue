@@ -4,7 +4,7 @@ import axios from "axios";
 
 const alert = async () => {
   try {
-    const response = await axios.post("http://localhost:3000/hello");
+    const response = await axios.post("http://localhost:3000/login");
     toast.success(response.data.message);
   } catch (error) {
     if (error.response) {
