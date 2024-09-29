@@ -17,13 +17,16 @@ import (
 )
 
 type Ctx struct {
-	Server   *Server                     // Reference to *Server
-	Method   string                      // HTTP method
-	BaseURI  string                      // HTTP base uri
-	Request  *http.Request               // HTTP request
-	Response *responseWriterWrapper      // HTTP response writer
-	params   map[string]string           // URL parameters
-	locals   map[interface{}]interface{} // Local variables
+	Server       *Server                     // Reference to *Server
+	Method       string                      // HTTP method
+	BaseURI      string                      // HTTP base uri
+	Request      *http.Request               // HTTP request
+	Response     *responseWriterWrapper      // HTTP response writer
+	params       map[string]string           // URL parameters
+	locals       map[interface{}]interface{} // Local variables
+	indexHandler int                         // Index of the handler
+	route        *Route                      // HTTP route
+
 }
 
 type responseWriterWrapper struct {
@@ -73,6 +76,9 @@ type Server struct {
 	//queue for errors ensures that errors are not lost
 	//if errors persist more than 3 times the background tasks will be stopped
 	errorQueue chan error
+
+	//middleware stack
+	middleware []Middleware
 }
 
 // Config is a struct holding the server settings.
@@ -375,6 +381,7 @@ func (server *Server) AddRoute(method, path string, handlers ...Handler) {
 		Handlers: handlers,
 	}
 
+	server.applyMiddleware(route)
 	server.stack[methodIndex] = append(server.stack[methodIndex], route)
 }
 
@@ -479,6 +486,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, route := range server.stack[methodIndex] {
 		if matched, params := matchRoute(route.Path, r.URL.Path); matched {
 			ctx.params = params
+			ctx.route = route
 			for _, handler := range route.Handlers {
 				err := handler(ctx)
 				if err != nil {
@@ -496,27 +504,46 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // for example you could have an authentication middleware that checks for cookies with
 // every request to authenticate the user request
 func (server *Server) Use(middleware Middleware) {
+	server.middleware = append(server.middleware, middleware)
+
 	for _, routes := range server.stack {
 		for _, route := range routes {
-			for k, handler := range route.Handlers {
-				route.Handlers[k] = middleware(handler)
-			}
+			server.applyMiddleware(route)
 		}
 	}
 }
 
-// JSON writes a JSON response
-// If you notice using c.Status(http.StatusOk).JSON(...json_payload) is not working
-// properly, you can simply use c.JSON(...json_payload) without specifying the status
-// this will be fixed in a future  release
-func (c *Ctx) JSON(data interface{}) error {
-	raw, err := c.Server.config.JSONEncoder(data)
-	if err != nil {
-		return err
+// apply middleware to the handler
+func (server *Server) applyMiddleware(route *Route) {
+	for k, handler := range route.Handlers {
+		for _, middleware := range server.middleware {
+			route.Handlers[k] = middleware(handler)
+		}
 	}
-	//TODO: set content type not working when status is set as well
-	c.Response.Header().Set("Content-Type", "application/json")
-	c.Response.Write(raw)
+}
+
+// Context returns the context of the request
+// (This is the same as c.Request.Context()) as it returns a http.Request.Context()
+func (c *Ctx) Context() context.Context {
+	return c.Request.Context()
+}
+
+// Next is used to execute the next handler in the stack
+// This is useful when you want to execute the next handler in the stack
+// but you want to do some additional work before executing the next handler
+// for example, you can use this to authenticate the user
+func (c *Ctx) Next() error {
+	if c.route == nil {
+		return fmt.Errorf("no route set for this context")
+	}
+	// Increment handler index
+	c.indexHandler++
+	// Check if we have more handlers to execute
+	if c.indexHandler >= len(c.route.Handlers) {
+		return fmt.Errorf("no more handlers to execute")
+	}
+
+	// Execute the next handler
 	return nil
 }
 
@@ -525,7 +552,7 @@ func (c *Ctx) JSON(data interface{}) error {
 // for example, a session token and a refresh token by calling this once
 //
 // Make sure the structure of your cookie meets the Cookie structure to avoid errors
-func (c *Ctx) SetCookie(cookies ...Cookie) error {
+func (c *Ctx) SetCookie(cookies ...Cookie) *Ctx {
 	existing := c.Response.Header().Get("Set-Cookie")
 	for _, cookie := range cookies {
 		var cookieHeader string
@@ -561,7 +588,7 @@ func (c *Ctx) SetCookie(cookies ...Cookie) error {
 
 	// Set all cookies
 	c.Response.Header().Set("Set-Cookie", existing)
-	return nil
+	return c
 }
 
 func sameSiteToString(s SameSite) string {
@@ -612,7 +639,7 @@ func parseCookies(cookieHeader string) map[string]Cookie {
 
 // This function is used to delete cookies
 // You can pass multiple names of cookies to be deleted at once
-func (c *Ctx) DeleteCookie(names ...string) error {
+func (c *Ctx) DeleteCookie(names ...string) *Ctx {
 	cookies := []Cookie{}
 	for _, name := range names {
 		cookie := Cookie{
@@ -631,6 +658,24 @@ func (c *Ctx) DeleteCookie(names ...string) error {
 		return err
 	}
 	return nil
+}
+
+// This is used to retrieve the header value specified by the key
+// This is particularly useful when you want to retrieve specific headers
+// from a request such as the Authorization header
+func (c *Ctx) Header(key string) string {
+	return c.Request.Header.Get(key)
+}
+
+func (c *Ctx) IP() string {
+	IPAddress := c.Request.Header.Get("X-Real-Ip")
+	if IPAddress == "" {
+		IPAddress = c.Request.Header.Get("X-Forwarded-For")
+	}
+	if IPAddress == "" {
+		IPAddress = c.Request.RemoteAddr
+	}
+	return IPAddress
 }
 
 // This can be used to set the local  values of a request
@@ -689,13 +734,44 @@ func (c *Ctx) Query(key string) string {
 	return c.Request.URL.Query().Get(key)
 }
 
+// JSON writes a JSON response
+// If you would like to set the status code of the response, you can pass it as the second argument
+//
+// If you notice using c.Status(http.StatusOk).JSON(...json_payload) is not working
+// properly, you can simply use c.JSON(...json_payload) without specifying the status
+// Default status code is 200
+func (c *Ctx) JSON(data interface{}, status ...int) error {
+	raw, err := c.Server.config.JSONEncoder(data)
+	if err != nil {
+		return err
+	}
+	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.Write(raw)
+
+	if len(status) > 0 {
+		c.Response.WriteHeader(status[0])
+	} else {
+		c.Response.WriteHeader(http.StatusOK)
+	}
+	return nil
+}
+
 // /You can use this to set the staus of a response
 // Eg: c.Status(http.StatusOk) or c.Status(200)
+//
+// Does not work with c.JSON(...) as the response will be sent as plain text
 func (c *Ctx) Status(status int) *Ctx {
 	c.Response.WriteHeader(status)
 	return c
 }
 
+func (c *Ctx) Set(key string, val interface{}) *Ctx {
+	c.Response.SetHeader(key, fmt.Sprint(val))
+	return c
+}
+
+// SendString sends a string as the response
+// Default status code is 200
 func (c *Ctx) SendString(body string) error {
 	c.Response.Write([]byte(body))
 	return nil
@@ -709,6 +785,9 @@ func StatusMessage(status int) string {
 	return http.StatusText(status)
 }
 
+// SendStatus sends a status code as the response
+// Does not send any body
+// Does not accept additional helpers like c.Status(200).JSON(...)
 func (c *Ctx) SendStatus(status int) error {
 	c.Response.WriteHeader(status)
 
@@ -802,7 +881,11 @@ func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error 
 
 func (rw *responseWriterWrapper) WriteHeader(statusCode int) {
 	rw.statusCode = statusCode
-	rw.ResponseWriter.WriteHeader(statusCode)
+	rw.ResponseWriter.Header().Set("Status Code", strconv.Itoa(statusCode))
+}
+
+func (rw *responseWriterWrapper) SetHeader(key, val string) {
+	rw.ResponseWriter.Header().Set(key, val)
 }
 
 func (rw *responseWriterWrapper) Write(data []byte) (int, error) {

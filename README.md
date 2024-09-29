@@ -71,6 +71,7 @@ The results show that Pine is the fastest of the three frameworks tested. It is 
 - Built on top of the standard net/http library. You can easily integrate pine with other features of the standard library without having to rewrite your code.
 - Built on top of the standard context.Context. This allows for easy integration with other libraries such as database connections.
 - Supports middleware
+- Out of the box support for helmet and cors
 - Supports background tasks managed by Pine's runtime scheduler
 
 ### Background tasks example
@@ -140,7 +141,8 @@ We aim to bring Pine to the same level as other popular frameworks. Some of the 
 - Websocket support
 - File upload support out of the box
 - Session support and pooling
-- More middlewares out of the box such as CORS, CSRF, Rate Limiting, etc.
+- Caching support
+- More middlewares out of the box such as CSRF, Rate Limiting, etc.
 - More background tasks with more sophisticated scheduling and handling
 
 <!-- CONTRIBUTING -->
