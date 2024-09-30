@@ -14,6 +14,8 @@ func ParseMethod(method string) bool {
 		return true
 	case pine.MethodDelete:
 		return true
+	case pine.MethodOptions:
+		return true
 	default:
 		return false
 	}

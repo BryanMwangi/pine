@@ -295,10 +295,12 @@ func (server *Server) methodInt(s string) int {
 // Default methods, more coming soon
 var DefaultMethods = []string{
 	MethodGet,
+	MethodHead,
+	MethodPost,
 	MethodPut,
 	MethodDelete,
 	MethodPatch,
-	MethodHead,
+	MethodOptions,
 }
 
 // This is called to start a new Pine server
@@ -423,11 +425,9 @@ func splitPath(path string) []string {
 func (server *Server) Get(path string, handlers ...Handler) {
 	server.AddRoute(MethodGet, path, handlers...)
 }
-
 func (server *Server) Post(path string, handlers ...Handler) {
 	server.AddRoute(MethodPost, path, handlers...)
 }
-
 func (server *Server) Put(path string, handlers ...Handler) {
 	server.AddRoute(MethodPost, path, handlers...)
 }
@@ -436,6 +436,10 @@ func (server *Server) Patch(path string, handlers ...Handler) {
 }
 func (server *Server) Delete(path string, handlers ...Handler) {
 	server.AddRoute(MethodPost, path, handlers...)
+}
+
+func (server *Server) Options(path string, handlers ...Handler) {
+	server.AddRoute(MethodOptions, path, handlers...)
 }
 
 // Called to start the server after creating a new server
@@ -479,27 +483,43 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		params:   make(map[string]string),
 	}
 
-	methodIndex := server.methodInt(r.Method)
-	if methodIndex == -1 {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	//TODO: if the route exists in the stack but its method index is not the
-	//same, we should return a method not allowed
-	for _, route := range server.stack[methodIndex] {
-		if matched, params := matchRoute(route.Path, r.URL.Path); matched {
-			ctx.params = params
-			ctx.route = route
-			for _, handler := range route.Handlers {
-				err := handler(ctx)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
+	var matchedRoute *Route
+	for _, routes := range server.stack {
+		for _, route := range routes {
+			if matched, params := matchRoute(route.Path, r.URL.Path); matched {
+				matchedRoute = route
+				ctx.params = params
+				break
 			}
-			return
+		}
+		if matchedRoute != nil {
+			break
 		}
 	}
+
+	if matchedRoute != nil {
+		// for CORS we need to check if the method if OPTIONS and we pass the request
+		// to the first handler in the stack
+		if r.Method == MethodOptions {
+			matchedRoute.Handlers[0](ctx)
+			return
+		}
+		if matchedRoute.Method != r.Method {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Call the handlers for the matched route
+		for _, handler := range matchedRoute.Handlers {
+			err := handler(ctx)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		return
+	}
+
 	http.NotFound(w, r)
 }
 
@@ -749,20 +769,19 @@ func (c *Ctx) JSON(data interface{}, status ...int) error {
 		return err
 	}
 	c.Response.Header().Set("Content-Type", "application/json")
-	c.Response.Write(raw)
-
 	if len(status) > 0 {
 		c.Response.WriteHeader(status[0])
 	} else {
 		c.Response.WriteHeader(http.StatusOK)
 	}
+	c.Response.Write(raw)
 	return nil
 }
 
 // /You can use this to set the staus of a response
 // Eg: c.Status(http.StatusOk) or c.Status(200)
 //
-// Does not work with c.JSON(...) as the response will be sent as plain text
+// Does not work well with c.JSON(...) as the response will be sent as plain text
 func (c *Ctx) Status(status int) *Ctx {
 	c.Response.WriteHeader(status)
 	return c
@@ -883,8 +902,10 @@ func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error 
 }
 
 func (rw *responseWriterWrapper) WriteHeader(statusCode int) {
-	rw.statusCode = statusCode
-	rw.ResponseWriter.WriteHeader(statusCode)
+	if rw.statusCode == 0 {
+		rw.statusCode = statusCode
+		rw.ResponseWriter.WriteHeader(statusCode)
+	}
 }
 
 func (rw *responseWriterWrapper) SetHeader(key, val string) {

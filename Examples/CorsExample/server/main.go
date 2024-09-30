@@ -10,16 +10,19 @@ import (
 
 func main() {
 	app := pine.New()
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowedOrigins:   []string{"http://localhost:5174"},
+		AllowCredentials: true,
+	}))
 
-	app.Post("/hello", func(c *pine.Ctx) error {
-		return c.JSON(
-			map[string]string{
-				"message": "Hello World!",
-			},
-			http.StatusOK,
-		)
+	app.Post("/login", func(c *pine.Ctx) error {
+		return c.JSON(map[string]string{
+			"message": "login successful",
+		},
+			202)
 	})
-
+	app.Options("/login2", func(c *pine.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
 	log.Fatal(app.Start(":3000", "", ""))
 }

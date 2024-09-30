@@ -34,7 +34,7 @@ type Config struct {
 	// AllowedHeaders is list of non simple headers the client is allowed to use with
 	// cross-domain requests.
 	// If the special "*" value is present in the list, all headers will be allowed.
-	// Default value is "" but "Origin" is always appended to the list.
+	// Default value is "Content-Type, Authorization"
 	AllowedHeaders string
 
 	// ExposedHeaders indicates which headers are safe to expose to the API of a CORS
@@ -43,6 +43,7 @@ type Config struct {
 	// Default value is ""
 	ExposedHeaders string
 
+	AllowCredentials bool
 	// MaxAge indicates how long (in seconds) the results of a preflight request
 	// can be cached
 	// Default value is 0, i.e. the browser does not cache the result.
@@ -56,14 +57,17 @@ var defaultConfig = Config{
 	AllowOriginFunc: nil,
 	AllowedMethods: []string{
 		pine.MethodGet,
+		pine.MethodHead,
 		pine.MethodPost,
 		pine.MethodPut,
 		pine.MethodPatch,
 		pine.MethodDelete,
+		pine.MethodOptions,
 	},
-	AllowedHeaders: "",
-	ExposedHeaders: "",
-	MaxAge:         0,
+	AllowedHeaders:   "Content-Type, Authorization",
+	ExposedHeaders:   "",
+	MaxAge:           0,
+	AllowCredentials: false,
 }
 
 func New(config ...Config) pine.Middleware {
@@ -129,6 +133,12 @@ func New(config ...Config) pine.Middleware {
 			cfg.ExposedHeaders = defaultConfig.ExposedHeaders
 		}
 
+		if setConfig.AllowCredentials {
+			cfg.AllowCredentials = setConfig.AllowCredentials
+		} else {
+			cfg.AllowCredentials = defaultConfig.AllowCredentials
+		}
+
 		// Overwrite the default MaxAge with the user MaxAge
 		if setConfig.MaxAge != 0 {
 			cfg.MaxAge = setConfig.MaxAge
@@ -162,6 +172,7 @@ func SetCors(c *pine.Ctx, cfg Config) *pine.Ctx {
 	c.Set("Access-Control-Allow-Methods", allowedMethods)
 	c.Set("Access-Control-Allow-Headers", allowHeaders)
 	c.Set("Access-Control-Expose-Headers", exposeHeaders)
+	c.Set("Access-Control-Allow-Credentials", cfg.AllowCredentials)
 	c.Set("Access-Control-Max-Age", cfg.MaxAge)
 	return c
 }
