@@ -397,6 +397,8 @@ func matchRoute(routePath, requestPath string) (bool, map[string]string) {
 	}
 
 	// Example for a single parameter (e.g., "/user/:id")
+	// multiple parameters in dynamic routes can also be used
+	// for example /user/:id/record/:recordId
 	if len(routePath) > 0 && routePath[0] == '/' && len(requestPath) > 0 && requestPath[0] == '/' {
 		routeSegments := splitPath(routePath)
 		requestSegments := splitPath(requestPath)
@@ -500,6 +502,8 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if matchedRoute != nil {
 		// for CORS we need to check if the method if OPTIONS and we pass the request
 		// to the first handler in the stack
+		// TODO: not just the first handler but all handlers except the last handler
+		// as middlewares are considered handlers.
 		if r.Method == MethodOptions {
 			matchedRoute.Handlers[0](ctx)
 			return
