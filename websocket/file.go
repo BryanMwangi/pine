@@ -49,7 +49,6 @@ func WatchFile(path string, conn *Conn) error {
 		return fmt.Errorf("error adding file to watcher: %v", err)
 	}
 
-	// Initialize variables
 	var fileContent []byte
 	var exceededSize bool
 
@@ -64,6 +63,9 @@ func WatchFile(path string, conn *Conn) error {
 		defer f.Close()
 
 		// Read the last maxFileSize bytes
+		// this may produce buggy behaviour as sometimes not the last bytes are
+		// read but part of the file is read
+		// TODO: Fix this bug
 		_, err = f.ReadAt(fileContent, fileInfo.Size()-int64(maxFileSize))
 		if err != nil {
 			return fmt.Errorf("error reading file: %v", err)
@@ -77,12 +79,15 @@ func WatchFile(path string, conn *Conn) error {
 	}
 
 	// Send the initial content to the connection
-	conn.viewedBytesSize = len(fileContent) // Initialize for this connection
+	// useful to get past data on start connection
+	conn.viewedBytesSize = len(fileContent)
 	if err = conn.Conn.WriteMessage(websocket.TextMessage, fileContent); err != nil {
 		return fmt.Errorf("error writing initial message: %v", err)
 	}
 
 	// Start a goroutine to listen for file changes
+	// If you use a managed connection with a channel this go routine may block
+	// refrain from writing file changes to channels and write to the connection directly
 	go func() {
 		for {
 			select {
@@ -94,7 +99,12 @@ func WatchFile(path string, conn *Conn) error {
 					var additionalBytes []byte
 
 					if exceededSize {
-						// Read only the last maxFileSize bytes
+						// Known issue: Bug when reading the last bytes of a file
+						// This occurs for very large files
+						// refrain from watching files larger than 5 MB
+						//
+						// a good practice is to rotate your files in the event of watching
+						// large files such as log files that are continously written to
 						f, err := os.Open(path)
 						if err != nil {
 							fmt.Println("Error opening file:", err)
@@ -108,7 +118,9 @@ func WatchFile(path string, conn *Conn) error {
 							continue
 						}
 					} else {
-						// Read new content from the last viewed position
+						// no issues so far except fast updates to the file might break the os.Open
+						// if this file is written to by another process the OS can completely
+						//  block reads until all writes are complete
 						file, err := os.Open(path)
 						if err != nil {
 							fmt.Println("Error opening file:", err)
@@ -121,7 +133,7 @@ func WatchFile(path string, conn *Conn) error {
 							continue
 						}
 
-						additionalBytes = make([]byte, 1024) // Read in chunks
+						additionalBytes = make([]byte, 1024)
 						n, err := file.Read(additionalBytes)
 						if err != nil && err != io.EOF {
 							fmt.Println("Error reading new content:", err)
@@ -130,7 +142,7 @@ func WatchFile(path string, conn *Conn) error {
 
 						if n > 0 {
 							conn.Conn.WriteMessage(websocket.TextMessage, additionalBytes[:n])
-							conn.viewedBytesSize += n // Update viewed bytes size
+							conn.viewedBytesSize += n
 						}
 					}
 
