@@ -167,8 +167,8 @@ type Route struct {
 // time is optional and defaults to 5 minutes according to the server configuration
 //
 // Fn is the function that will be executed
-// It should always return an error as the error is what will be used
-// to delete the task from the queue
+// It should always return an error if error is not nil the error will be used
+// to delete the task from the queue otherwise when nil the task will run indefinitely
 type BackgroundTask struct {
 	id   uuid.UUID
 	Fn   func() error
