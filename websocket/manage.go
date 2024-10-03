@@ -1,6 +1,8 @@
 // Pine's websocket package is a websocket server that supports multiple channels
 // This feature is experimental and may change in the future.
 // Please use it with caution and at your own risk.
+//
+// TODO: Fix multichannel handling
 package websocket
 
 import (
