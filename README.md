@@ -137,7 +137,6 @@ func logHello2() error {
 
 We aim to bring Pine to the same level as other popular frameworks. Some of the features we plan to add in the future include:
 
-- Websocket support
 - File upload support out of the box
 - Session support and pooling
 - Caching support
