@@ -95,13 +95,13 @@ type Config struct {
 	// It is reset after the request handler has returned.
 	// The connection's read deadline is reset when the connection opens.
 	//
-	// Default: unlimited
+	// Default: 5 Seconds
 	ReadTimeout time.Duration `json:"read_timeout"`
 
 	// The maximum duration before timing out writes of the response.
 	// It is reset after the request handler has returned.
 	//
-	// Default: unlimited
+	// Default: 5 Seconds
 	WriteTimeout time.Duration `json:"write_timeout"`
 
 	//This is the periodic time in which the server can execute
@@ -133,6 +133,7 @@ type Config struct {
 	// Default: json.Unmarshal
 
 	JSONDecoder JSONUnmarshal `json:"-"`
+
 	// StreamRequestBody enables request body streaming,
 	// and calls the handler sooner when given body is
 	// larger then the current limit.
@@ -142,9 +143,6 @@ type Config struct {
 	//
 	// Optional. Default: DefaultMethods
 	RequestMethods []string
-
-	// Client is used to make requests to other servers
-	Client *http.Client
 }
 
 // Route is a struct that holds all metadata for each registered handler.
@@ -353,9 +351,6 @@ func New(config ...Config) *Server {
 		}
 		if userConfig.RequestMethods != nil {
 			cfg.RequestMethods = userConfig.RequestMethods
-		}
-		if userConfig.Client != nil {
-			cfg.Client = userConfig.Client
 		}
 	}
 
@@ -824,14 +819,6 @@ func (c *Ctx) SendStatus(status int) error {
 	}
 
 	return nil
-}
-
-// this is used to act make the server act as a client
-// the server can be used to make requests to other servers
-func (server *Server) Client() *http.Client {
-	return &http.Client{
-		Timeout: server.config.ReadTimeout,
-	}
 }
 
 // AddQueue is used put some functions in a queue that can be executed
