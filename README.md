@@ -52,7 +52,7 @@ Fun fact, by the time the Express benchmarks were finished, we had run the Pine 
 
 | Framework | Requests/sec | Avg Latency | Slowest     |
 | --------- | ------------ | ----------- | ----------- |
-| Express   | 1966         | 50.08 ms    | 1.328 ms    |
+| Express   | 1966         | 1.328 ms    | 50.08 ms    |
 | Pine      | 77229        | 1.328 ms    | 19.07125 ms |
 | Fiber     | 73959        | 1.302 ms    | 50.50235 ms |
 
