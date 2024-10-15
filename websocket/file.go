@@ -120,7 +120,7 @@ func WatchFile(path string, conn *Conn) error {
 					} else {
 						// no issues so far except fast updates to the file might break the os.Open
 						// if this file is written to by another process the OS can completely
-						//  block reads until all writes are complete
+						// block reads until all writes are complete
 						file, err := os.Open(path)
 						if err != nil {
 							fmt.Println("Error opening file:", err)

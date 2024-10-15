@@ -690,6 +690,10 @@ func (c *Ctx) Header(key string) string {
 	return c.Request.Header.Get(key)
 }
 
+// Retrieves the IP address of the client
+//
+// If you notice the IP address is sometimes different from the actual IP address
+// please open an issue and we will look into it
 func (c *Ctx) IP() string {
 	IPAddress := c.Request.Header.Get("X-Real-Ip")
 	if IPAddress == "" {
@@ -707,15 +711,17 @@ func (c *Ctx) IP() string {
 // Then you can simply pack this data into the locals value of your request
 // by doing c.Locals("key", data)
 //
-// now whenever a request is made with that cookie if you set up your middleware
+// Now whenever a request is made with that cookie if you set up your middleware
 // to unpack the data in the locals field of your request you can access this data
 // in your route
 //
-//	Eg: in your app.Get("/helloYou", authmiddleware(func(c *pine.Ctx) error {
-//			user:=c.Locals("key")
-//			return c.SendString("hello"+  user.name)
-//	 }))
-func (c *Ctx) Locals(key interface{}, value ...interface{}) interface{} {
+//	Example:
+//
+//	app.Get("/helloYou", authmiddleware(func(c *pine.Ctx) error {
+//				user:=c.Locals("key")
+//				return c.SendString("hello"+  user.name)
+//		 }))
+func (c *Ctx) Locals(key string, value ...interface{}) interface{} {
 	if len(value) == 0 {
 		return c.locals[key]
 	}
