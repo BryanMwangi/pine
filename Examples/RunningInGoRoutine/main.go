@@ -36,7 +36,7 @@ func main() {
 			log.Println("error shutting down clients")
 		}
 
-		// Close the Fiber app and send shutdown signal
+		// Close the Pine app and send shutdown signal
 		if err := app.ServeShutDown(ctx); err != nil {
 			log.Println("Error during shutdown ", err)
 		}
