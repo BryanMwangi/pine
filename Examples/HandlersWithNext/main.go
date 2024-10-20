@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -19,7 +18,7 @@ func main() {
 		return c.SendString("Secret")
 	})
 
-	log.Fatal(app.Start(":3000", "", ""))
+	log.Fatal(app.Start(":3000"))
 }
 
 // in this we use authentication as a middleware for a specific route

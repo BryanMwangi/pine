@@ -8,14 +8,15 @@ Simple Go server framework built on the same concepts of ease of use such as Fib
 
 To get started you will need to import the go module by typing
 
-- go
-  ```sh
-  go get github.com/BryanMwangi/pine
-  ```
+go
+
+```sh
+go get github.com/BryanMwangi/pine
+```
 
 ## Quick start
 
-Getting started with pine is easy. Here's a basic example to create a simple web server that responds with "Hello, World!" on the root path.
+Getting started with pine is easy. Here's a basic example to create a simple web server that responds with "Hello, World!" on the hello path.
 
 ```go
 package main
@@ -30,13 +31,13 @@ func main() {
     // Initialize a new Pine app
     app := pine.New()
 
-    // Define a route for the GET method on the root path '/hello'
+    // Define a route for the GET method on the path '/hello'
     app.Get("/hello", func(c *pine.Ctx) error {
         return c.SendString("Hello World!")
     })
 
     // Start the server on port 3000
-    log.Fatal(app.Start(":3000","",""))
+    log.Fatal(app.Start(":3000"))
 }
 ```
 

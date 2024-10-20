@@ -24,5 +24,5 @@ func main() {
 	app.Options("/login2", func(c *pine.Ctx) error {
 		return c.SendStatus(http.StatusNoContent)
 	})
-	log.Fatal(app.Start(":3000", "", ""))
+	log.Fatal(app.Start(":3000"))
 }

@@ -22,7 +22,7 @@ func main() {
 	go func() {
 		// Listen on the specified port and send the error to the channel
 		//certFile and Keyfile is optional
-		ch <- app.Start(":3000", "", "")
+		ch <- app.Start(":3000")
 	}()
 	select {
 	case <-ctx.Done():

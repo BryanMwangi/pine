@@ -34,5 +34,5 @@ func main() {
 	})
 
 	// Start the server on port 3000
-	log.Fatal(app.Start(":3000", "", ""))
+	log.Fatal(app.Start(":3000"))
 }

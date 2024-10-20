@@ -143,6 +143,9 @@ type Config struct {
 	//
 	// Optional. Default: DefaultMethods
 	RequestMethods []string
+
+	// TLSConfig is the configuration for TLS.
+	TLSConfig TLSConfig
 }
 
 // Route is a struct that holds all metadata for each registered handler.
@@ -238,6 +241,12 @@ type Cookie struct {
 	Unparsed []string
 }
 
+type TLSConfig struct {
+	ServeTLS bool
+	CertFile string
+	KeyFile  string
+}
+
 type SameSite int
 
 type Handler = func(*Ctx) error
@@ -267,6 +276,13 @@ const (
 	MethodOptions = "OPTIONS"
 	methodUse     = "USE"
 )
+
+// Default TLS config
+var defaultTLSConfig = TLSConfig{
+	ServeTLS: false,
+	CertFile: "",
+	KeyFile:  "",
+}
 
 // int equivalent of the mothod
 // this is used to speed up route matching instead of trying to match strings
@@ -316,6 +332,7 @@ func New(config ...Config) *Server {
 		JSONDecoder:       json.Unmarshal,
 		RequestMethods:    DefaultMethods,
 		StreamRequestBody: false,
+		TLSConfig:         defaultTLSConfig,
 	}
 
 	if len(config) > 0 {
@@ -351,6 +368,9 @@ func New(config ...Config) *Server {
 		}
 		if userConfig.RequestMethods != nil {
 			cfg.RequestMethods = userConfig.RequestMethods
+		}
+		if userConfig.TLSConfig.ServeTLS {
+			cfg.TLSConfig = userConfig.TLSConfig
 		}
 	}
 
@@ -444,7 +464,7 @@ func (server *Server) Options(path string, handlers ...Handler) {
 //
 // You can put this in a go routine to handle graceful shut downs
 // You can check out an example on https://github/BryanMwangi/pine/Examples/RunningInGoRoutine/main.go
-func (server *Server) Start(address string, CertFile, KeyFile string) error {
+func (server *Server) Start(address string) error {
 	httpServer := &http.Server{
 		Addr:         address,
 		ReadTimeout:  server.config.ReadTimeout,
@@ -461,10 +481,12 @@ func (server *Server) Start(address string, CertFile, KeyFile string) error {
 		go server.processQueue()
 	}
 	//certfile and keyfile are needed to handle https connections
-	//if the certfile and keyfile are not empty strings the server will default to http
-	if CertFile != "" && KeyFile != "" {
-		return httpServer.ListenAndServeTLS(CertFile, KeyFile)
-
+	//if the certfile and keyfile are not empty strings the server panic
+	if server.config.TLSConfig.ServeTLS {
+		if server.config.TLSConfig.CertFile == "" || server.config.TLSConfig.KeyFile == "" {
+			panic("certfile and keyfile are required to serve https")
+		}
+		return httpServer.ListenAndServeTLS(server.config.TLSConfig.CertFile, server.config.TLSConfig.KeyFile)
 	}
 	return httpServer.ListenAndServe()
 }
