@@ -114,6 +114,10 @@ func RuntimeError(message interface{}) {
 	fmt.Println(Red + message.(string) + Reset)
 }
 
+func RuntimeInfo(message interface{}) {
+	fmt.Println(White + message.(string) + Reset)
+}
+
 func Warning(message interface{}) {
 	fmt.Println(Yellow + message.(string) + Reset)
 	log.Println("WARN : " + message.(string))

@@ -11,9 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/BryanMwangi/pine/logger"
-	"github.com/google/uuid"
 )
 
 type Ctx struct {
@@ -57,26 +54,6 @@ type Server struct {
 	//the route stack is divided by HTTP methods and route prefixes
 	stack [][]*Route
 
-	//in case you want to serve https out of the box
-	//you can set this to an empty string when you start a new server by
-	//doing app:=pine.New(":3000","","")
-	//this will default the server to http
-	CertFile string
-
-	//in case you want to serve https out of the box
-	//you can set this to an empty string when you start a new server by
-	//doing app:=pine.New(":3000","","")
-	//this will default the server to http
-	KeyFile string
-
-	// a slice of background tasks
-	//these are executed in the background infinitely
-	tasks []BackgroundTask
-
-	//queue for errors ensures that errors are not lost
-	//if errors persist more than 3 times the background tasks will be stopped
-	errorQueue chan error
-
 	//middleware stack
 	middleware []Middleware
 }
@@ -87,57 +64,42 @@ type Config struct {
 	//defines the body limit for a request.
 	// -1 will decline any body size
 	//
-	// Default: 4 * 1024 * 1024
+	// Default: 5 * 1024 * 1024
 	// Increase this to accept larger files
-	BodyLimit int `json:"body_limit"`
+	BodyLimit int64
 
-	// The amount of time allowed to read the full request including body.
-	// It is reset after the request handler has returned.
-	// The connection's read deadline is reset when the connection opens.
+	// Defines the amount of time allowed to read an incoming request.
+	// This also includes the body.
 	//
 	// Default: 5 Seconds
-	ReadTimeout time.Duration `json:"read_timeout"`
+	ReadTimeout time.Duration
 
-	// The maximum duration before timing out writes of the response.
-	// It is reset after the request handler has returned.
+	// Defines the maximum duration before timing out writes of the response.
+	// Increase this to allow longer response times.
 	//
 	// Default: 5 Seconds
-	WriteTimeout time.Duration `json:"write_timeout"`
+	WriteTimeout time.Duration
 
-	//This is the periodic time in which the server can execute
-	//background tasks background tasks can run infinitely
-	//as long as the server is running
-	//for example you can use this to make requests to other servers
-	//or update your database
-	//
-	// Default: 5 minutes
-	BackgroundTimeout time.Duration `json:"background_timeout"`
-
-	// When set to true, disables keep-alive connections.
-	// The server will close incoming connections after sending the first response to client.
+	// Closes incomming connections after sending the first response to client.
+	// This is useful when you want to close connections after a specific route
 	//
 	// Default: false
-	DisableKeepAlive bool `json:"disable_keep_alive"`
+	DisableKeepAlive bool
 
 	// This defines the JSON encoder used by Pine for outgoing requests. The default is
 	// JSONMarshal
 	//
 	// Allowing for flexibility in using another json library for encoding
 	// Default: json.Marshal
+	JSONEncoder JSONMarshal
 
-	JSONEncoder JSONMarshal `json:"-"`
 	// This defines the JSON decoder used by Pine for incoming requests. The default is
 	// JSONUnmarshal
 	//
 	// Allowing for flexibility in using another json library for decoding
 	// Default: json.Unmarshal
 
-	JSONDecoder JSONUnmarshal `json:"-"`
-
-	// StreamRequestBody enables request body streaming,
-	// and calls the handler sooner when given body is
-	// larger then the current limit.
-	StreamRequestBody bool
+	JSONDecoder JSONUnmarshal
 
 	// RequestMethods provides customizibility for HTTP methods. You can add/remove methods as you wish.
 	//
@@ -158,23 +120,6 @@ type Route struct {
 	Path string `json:"path"`
 	// Ctx handlers
 	Handlers []Handler `json:"-"`
-}
-
-// This is the structure of a background task
-// you can use this to put whatever tasks you want to perform
-// in the background as the server runs and Pine will take care of executing
-// them in the background
-//
-// time is optional and defaults to 5 minutes according to the server configuration
-//
-// Fn is the function that will be executed.
-// It should always return an error.
-// If error is not nil the error will be used to delete the
-// task from the queue otherwise when nil the task will run indefinitely
-type BackgroundTask struct {
-	id   uuid.UUID
-	Fn   func() error
-	Time time.Duration
 }
 
 // cookie struct that defines the structure of a cookie
@@ -258,7 +203,7 @@ type JSONMarshal func(v interface{}) ([]byte, error)
 type JSONUnmarshal func(data []byte, v interface{}) error
 
 const (
-	DefaultBodyLimit = 4 * 1024 * 1024
+	DefaultBodyLimit = 5 * 1024 * 1024 //5MB
 	statusMessageMin = 100
 	statusMessageMax = 511
 	queueCapacity    = 100
@@ -323,16 +268,14 @@ var DefaultMethods = []string{
 // or you can use the default and let Pine take care of it for you
 func New(config ...Config) *Server {
 	cfg := Config{
-		BodyLimit:         DefaultBodyLimit,
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
-		BackgroundTimeout: 5 * time.Minute,
-		DisableKeepAlive:  false,
-		JSONEncoder:       json.Marshal,
-		JSONDecoder:       json.Unmarshal,
-		RequestMethods:    DefaultMethods,
-		StreamRequestBody: false,
-		TLSConfig:         defaultTLSConfig,
+		BodyLimit:        DefaultBodyLimit,
+		ReadTimeout:      5 * time.Second,
+		WriteTimeout:     5 * time.Second,
+		DisableKeepAlive: false,
+		JSONEncoder:      json.Marshal,
+		JSONDecoder:      json.Unmarshal,
+		RequestMethods:   DefaultMethods,
+		TLSConfig:        defaultTLSConfig,
 	}
 
 	if len(config) > 0 {
@@ -348,9 +291,6 @@ func New(config ...Config) *Server {
 		if userConfig.WriteTimeout != 0 {
 			cfg.WriteTimeout = userConfig.WriteTimeout
 		}
-		if userConfig.BackgroundTimeout != 0 {
-			cfg.BackgroundTimeout = userConfig.BackgroundTimeout
-		}
 		if userConfig.DisableKeepAlive {
 			cfg.DisableKeepAlive = userConfig.DisableKeepAlive
 		}
@@ -359,9 +299,6 @@ func New(config ...Config) *Server {
 		}
 		if userConfig.JSONDecoder != nil {
 			cfg.JSONDecoder = userConfig.JSONDecoder
-		}
-		if userConfig.StreamRequestBody {
-			cfg.StreamRequestBody = userConfig.StreamRequestBody
 		}
 		if userConfig.RequestMethods != nil {
 			cfg.RequestMethods = userConfig.RequestMethods
@@ -375,10 +312,9 @@ func New(config ...Config) *Server {
 	}
 
 	server := &Server{
-		config:     cfg,
-		stack:      make([][]*Route, len(cfg.RequestMethods)),
-		errorLog:   log.New(os.Stderr, "ERROR: ", log.LstdFlags),
-		errorQueue: make(chan error, queueCapacity),
+		config:   cfg,
+		stack:    make([][]*Route, len(cfg.RequestMethods)),
+		errorLog: log.New(os.Stderr, "ERROR: ", log.LstdFlags),
 	}
 
 	return server
@@ -473,13 +409,8 @@ func (server *Server) Start(address string) error {
 	}
 
 	server.server = httpServer
+	server.server.SetKeepAlivesEnabled(!server.config.DisableKeepAlive)
 
-	//we first check if the user registered any background tasks
-	//we start the background tasks in a separate goroutine
-	//this is to prevent blocking the main goroutine
-	if len(server.tasks) > 0 {
-		go server.processQueue()
-	}
 	//certfile and keyfile are needed to handle https connections
 	//if the certfile and keyfile are not empty strings the server panic
 	if server.config.TLSConfig.ServeTLS {
@@ -526,6 +457,11 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			matchedRoute.Handlers[0](ctx)
 			return
 		}
+
+		// Check if the request body is too large
+		r.Body = http.MaxBytesReader(w, r.Body, server.config.BodyLimit)
+
+		// Proceed to check if the method matches the method in the route
 		if matchedRoute.Method != r.Method {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
@@ -728,17 +664,17 @@ func (c *Ctx) IP() string {
 }
 
 // This can be used to set the local  values of a request
-// This is particulary usefule when unpacking data from a cookie
+// This is particulary useful when unpacking data from a cookie
 // Eg: You can parse a JWT token and decode the data inside it
 // Then you can simply pack this data into the locals value of your request
 // by doing c.Locals("key", data)
-//
+
 // Now whenever a request is made with that cookie if you set up your middleware
 // to unpack the data in the locals field of your request you can access this data
 // in your route
-//
-//	Example:
-//
+
+// 	Example:
+
 //	app.Get("/helloYou", authmiddleware(func(c *pine.Ctx) error {
 //				user:=c.Locals("key")
 //				return c.SendString("hello"+  user.name)
@@ -837,7 +773,7 @@ func StatusMessage(status int) string {
 
 // SendStatus sends a status code as the response
 // Does not send any body
-// Does not accept additional helpers like c.Status(200).JSON(...)
+// Does not accept additional methods like c.Status(200).JSON(...)
 func (c *Ctx) SendStatus(status int) error {
 	c.Response.WriteHeader(status)
 
@@ -847,65 +783,6 @@ func (c *Ctx) SendStatus(status int) error {
 	}
 
 	return nil
-}
-
-// AddQueue is used put some functions in a queue that can be executed
-// in the background for a specified period of time
-// This is particularly useful for making requests to other servers
-// or for performing some other background task
-//
-// You can add as many tasks as you want to the queue
-// however the please be mindful of the queue size as it will impact the performance
-// check out examples at https://github.com/BryanMwangi/pine/tree/main/Examples/BackgroundTask/main.go
-func (server *Server) AddQueue(tasks ...BackgroundTask) {
-	var createdTasks []BackgroundTask
-	for _, task := range tasks {
-		task.id = uuid.New()
-		createdTasks = append(createdTasks, task)
-	}
-	server.tasks = createdTasks
-}
-
-// Helper function to remove a task by its ID
-func (server *Server) removeTaskByID(id uuid.UUID) {
-	for i, task := range server.tasks {
-		if task.id == id {
-			server.tasks = append(server.tasks[:i], server.tasks[i+1:]...)
-			return
-		}
-	}
-}
-
-func (server *Server) startBackgroundTask(task BackgroundTask) {
-	for {
-		// Execute the task function
-		err := task.Fn()
-		if err != nil {
-			server.errorQueue <- err
-			// Log the error
-			logger.RuntimeError("Error in background task")
-			logger.RuntimeError(getFunctionName(task.Fn))
-			logger.RuntimeError(err.Error())
-
-			// Remove the task if it fails
-			server.removeTaskByID(task.id)
-			// Exit the goroutine to stop the task
-			break
-		}
-
-		// Respect the delay specified by the task
-		if task.Time > 0 {
-			time.Sleep(task.Time)
-		} else {
-			time.Sleep(server.config.BackgroundTimeout)
-		}
-	}
-}
-
-func (server *Server) processQueue() {
-	for _, task := range server.tasks {
-		go server.startBackgroundTask(task) // Start the background task
-	}
 }
 
 func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error {

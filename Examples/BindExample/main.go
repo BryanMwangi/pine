@@ -42,13 +42,12 @@ func main() {
 	})
 
 	app.Get("/search", func(c *pine.Ctx) error {
-		q := c.Query("query")
 		query := new(Query)
 		err := c.BindQuery("query", query)
 		if err != nil {
 			return c.SendStatus(http.StatusBadRequest)
 		}
-		return c.SendString("you search for " + q)
+		return c.SendString("you searched for " + string(*query))
 	})
 
 	app.Post("/login", func(c *pine.Ctx) error {
@@ -78,5 +77,5 @@ func main() {
 		return c.SendString("migration was a success!")
 	})
 	// Start the server on port 3000
-	log.Fatal(app.Start(":3000"))
+	log.Fatal(app.Start(":3001"))
 }
