@@ -26,27 +26,15 @@ type Config struct {
 
 	// HSTSExcludeSubdomains
 	// Optional. Default value false.
-	HSTSExcludeSubdomains bool
+	HSTSIncludeSubdomains bool
 
 	// ContentSecurityPolicy
 	// Optional. Default value "".
 	ContentSecurityPolicy string
 
-	// CSPReportOnly
-	// Optional. Default value false.
-	CSPReportOnly bool
-
-	// HSTSPreloadEnabled
-	// Optional. Default value false.
-	HSTSPreloadEnabled bool
-
 	// ReferrerPolicy
 	// Optional. Default value "ReferrerPolicy".
 	ReferrerPolicy string
-
-	// Permissions-Policy
-	// Optional. Default value "".
-	PermissionPolicy string
 
 	// Cross-Origin-Embedder-Policy
 	// Optional. Default value "require-corp".
@@ -77,135 +65,79 @@ type Config struct {
 	XPermittedCrossDomain string
 }
 
-var defaultConfig = Config{
-	XSSProtection:             "0",
-	ContentTypeNosniff:        "nosniff",
-	XFrameOptions:             "SAMEORIGIN",
-	HSTSMaxAge:                0,
-	HSTSExcludeSubdomains:     false,
-	ContentSecurityPolicy:     "",
-	CSPReportOnly:             false,
-	HSTSPreloadEnabled:        false,
-	ReferrerPolicy:            "ReferrerPolicy",
-	PermissionPolicy:          "",
-	CrossOriginEmbedderPolicy: "require-corp",
-	CrossOriginOpenerPolicy:   "same-origin",
-	CrossOriginResourcePolicy: "same-origin",
-	OriginAgentCluster:        "?1",
-	XDNSPrefetchControl:       "off",
-	XDownloadOptions:          "noopen",
-	XPermittedCrossDomain:     "none",
-}
-
 func New(config ...Config) pine.Middleware {
-	var setConfig Config
-	var cfg Config
+	cfg := Config{
+		XSSProtection:             "0",
+		ContentTypeNosniff:        "nosniff",
+		XFrameOptions:             "SAMEORIGIN",
+		HSTSMaxAge:                0,
+		HSTSIncludeSubdomains:     false,
+		ContentSecurityPolicy:     "",
+		ReferrerPolicy:            "ReferrerPolicy",
+		CrossOriginEmbedderPolicy: "require-corp",
+		CrossOriginOpenerPolicy:   "same-origin",
+		CrossOriginResourcePolicy: "same-origin",
+		OriginAgentCluster:        "?1",
+		XDNSPrefetchControl:       "off",
+		XDownloadOptions:          "noopen",
+		XPermittedCrossDomain:     "none",
+	}
 	if len(config) > 0 {
-		setConfig = config[0]
+		useConfig := config[0]
 		// Overwrite the default config with the user config
-		if setConfig.XSSProtection != "" {
-			cfg.XSSProtection = setConfig.XSSProtection
-		} else {
-			cfg.XSSProtection = defaultConfig.XSSProtection
+		if useConfig.XSSProtection != "" {
+			cfg.XSSProtection = useConfig.XSSProtection
 		}
 
-		if setConfig.ContentTypeNosniff != "" {
-			cfg.ContentTypeNosniff = setConfig.ContentTypeNosniff
-		} else {
-			cfg.ContentTypeNosniff = defaultConfig.ContentTypeNosniff
+		if useConfig.ContentTypeNosniff != "" {
+			cfg.ContentTypeNosniff = useConfig.ContentTypeNosniff
 		}
 
-		if setConfig.XFrameOptions != "" {
-			cfg.XFrameOptions = setConfig.XFrameOptions
-		} else {
-			cfg.XFrameOptions = defaultConfig.XFrameOptions
+		if useConfig.XFrameOptions != "" {
+			cfg.XFrameOptions = useConfig.XFrameOptions
+		}
+		if useConfig.HSTSMaxAge != 0 {
+			cfg.HSTSMaxAge = useConfig.HSTSMaxAge
 		}
 
-		if setConfig.HSTSMaxAge != 0 {
-			cfg.HSTSMaxAge = setConfig.HSTSMaxAge
-		} else {
-			cfg.HSTSMaxAge = defaultConfig.HSTSMaxAge
+		if useConfig.HSTSIncludeSubdomains {
+			cfg.HSTSIncludeSubdomains = useConfig.HSTSIncludeSubdomains
+		}
+		if useConfig.ContentSecurityPolicy != "" {
+			cfg.ContentSecurityPolicy = useConfig.ContentSecurityPolicy
 		}
 
-		if setConfig.HSTSExcludeSubdomains {
-			cfg.HSTSExcludeSubdomains = setConfig.HSTSExcludeSubdomains
-		} else {
-			cfg.HSTSExcludeSubdomains = defaultConfig.HSTSExcludeSubdomains
+		if useConfig.ReferrerPolicy != "" {
+			cfg.ReferrerPolicy = useConfig.ReferrerPolicy
 		}
 
-		if setConfig.ContentSecurityPolicy != "" {
-			cfg.ContentSecurityPolicy = setConfig.ContentSecurityPolicy
-		} else {
-			cfg.ContentSecurityPolicy = defaultConfig.ContentSecurityPolicy
+		if useConfig.CrossOriginEmbedderPolicy != "" {
+			cfg.CrossOriginEmbedderPolicy = useConfig.CrossOriginEmbedderPolicy
 		}
 
-		if setConfig.CSPReportOnly {
-			cfg.CSPReportOnly = setConfig.CSPReportOnly
-		} else {
-			cfg.CSPReportOnly = defaultConfig.CSPReportOnly
+		if useConfig.CrossOriginOpenerPolicy != "" {
+			cfg.CrossOriginOpenerPolicy = useConfig.CrossOriginOpenerPolicy
 		}
 
-		if setConfig.HSTSPreloadEnabled {
-			cfg.HSTSPreloadEnabled = setConfig.HSTSPreloadEnabled
-		} else {
-			cfg.HSTSPreloadEnabled = defaultConfig.HSTSPreloadEnabled
+		if useConfig.CrossOriginResourcePolicy != "" {
+			cfg.CrossOriginResourcePolicy = useConfig.CrossOriginResourcePolicy
 		}
 
-		if setConfig.ReferrerPolicy != "" {
-			cfg.ReferrerPolicy = setConfig.ReferrerPolicy
-		} else {
-			cfg.ReferrerPolicy = defaultConfig.ReferrerPolicy
+		if useConfig.OriginAgentCluster != "" {
+			cfg.OriginAgentCluster = useConfig.OriginAgentCluster
 		}
 
-		if setConfig.PermissionPolicy != "" {
-			cfg.PermissionPolicy = setConfig.PermissionPolicy
-		} else {
-			cfg.PermissionPolicy = defaultConfig.PermissionPolicy
+		if useConfig.XDNSPrefetchControl != "" {
+			cfg.XDNSPrefetchControl = useConfig.XDNSPrefetchControl
 		}
 
-		if setConfig.CrossOriginEmbedderPolicy != "" {
-			cfg.CrossOriginEmbedderPolicy = setConfig.CrossOriginEmbedderPolicy
-		} else {
-			cfg.CrossOriginEmbedderPolicy = defaultConfig.CrossOriginEmbedderPolicy
+		if useConfig.XDownloadOptions != "" {
+			cfg.XDownloadOptions = useConfig.XDownloadOptions
 		}
 
-		if setConfig.CrossOriginOpenerPolicy != "" {
-			cfg.CrossOriginOpenerPolicy = setConfig.CrossOriginOpenerPolicy
-		} else {
-			cfg.CrossOriginOpenerPolicy = defaultConfig.CrossOriginOpenerPolicy
+		if useConfig.XPermittedCrossDomain != "" {
+			cfg.XPermittedCrossDomain = useConfig.XPermittedCrossDomain
 		}
-
-		if setConfig.CrossOriginResourcePolicy != "" {
-			cfg.CrossOriginResourcePolicy = setConfig.CrossOriginResourcePolicy
-		} else {
-			cfg.CrossOriginResourcePolicy = defaultConfig.CrossOriginResourcePolicy
-		}
-
-		if setConfig.OriginAgentCluster != "" {
-			cfg.OriginAgentCluster = setConfig.OriginAgentCluster
-		} else {
-			cfg.OriginAgentCluster = defaultConfig.OriginAgentCluster
-		}
-
-		if setConfig.XDNSPrefetchControl != "" {
-			cfg.XDNSPrefetchControl = setConfig.XDNSPrefetchControl
-		} else {
-			cfg.XDNSPrefetchControl = defaultConfig.XDNSPrefetchControl
-		}
-
-		if setConfig.XDownloadOptions != "" {
-			cfg.XDownloadOptions = setConfig.XDownloadOptions
-		} else {
-			cfg.XDownloadOptions = defaultConfig.XDownloadOptions
-		}
-
-		if setConfig.XPermittedCrossDomain != "" {
-			cfg.XPermittedCrossDomain = setConfig.XPermittedCrossDomain
-		} else {
-			cfg.XPermittedCrossDomain = defaultConfig.XPermittedCrossDomain
-		}
-	} else {
-		cfg = defaultConfig
 	}
 
 	return func(next pine.Handler) pine.Handler {
@@ -229,24 +161,14 @@ func SetHelmet(c *pine.Ctx, cfg Config) *pine.Ctx {
 	if cfg.HSTSMaxAge != 0 {
 		c.Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d", cfg.HSTSMaxAge))
 	}
-	if cfg.HSTSExcludeSubdomains {
+	if cfg.HSTSIncludeSubdomains {
 		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 	}
 	if cfg.ContentSecurityPolicy != "" {
 		c.Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
 	}
-	if cfg.CSPReportOnly {
-		c.Set("Content-Security-Policy-Report-Only", cfg.ContentSecurityPolicy)
-	}
-	// will investigate later
-	// if cfg.HSTSPreloadEnabled {
-	// 	c.Set("Public-Key-Pins", "max-age=31536000; pin-sha256=\"")
-	// }
 	if cfg.ReferrerPolicy != "" {
 		c.Set("Referrer-Policy", cfg.ReferrerPolicy)
-	}
-	if cfg.PermissionPolicy != "" {
-		c.Set("Permissions-Policy", cfg.PermissionPolicy)
 	}
 	if cfg.CrossOriginEmbedderPolicy != "" {
 		c.Set("Cross-Origin-Embedder-Policy", cfg.CrossOriginEmbedderPolicy)

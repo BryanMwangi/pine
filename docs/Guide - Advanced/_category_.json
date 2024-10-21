@@ -1,0 +1,8 @@
+{
+  "label": "Guide - Advanced",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Demystifying Pine and providing better understanding of what is under the hood."
+  }
+}

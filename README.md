@@ -4,6 +4,8 @@ Simple Go server framework built on the same concepts of ease of use such as Fib
 
 <!-- GETTING STARTED -->
 
+You can simply jump to the [documentation](https://gopine.dev/)
+
 ## Getting Started
 
 To get started you will need to import the go module by typing

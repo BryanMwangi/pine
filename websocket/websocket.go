@@ -51,17 +51,6 @@ type Config struct {
 
 	// HandshakeTimeout specifies the duration for the handshake to complete.
 	HandshakeTimeout time.Duration
-
-	// This defines the the type of connection you wish to create
-	// it can be "self" or "managed"
-	// if you set it to "self" you will need to use the New function to open a
-	// new connection
-	// if you set it to "managed" you will need to use the Managed function to open a
-	// new connection
-	//
-	// default is "self"
-	// Please not that "managed" is experimental and may change in the future
-	Type string
 }
 
 var defaultConfig = Config{
@@ -72,7 +61,6 @@ var defaultConfig = Config{
 	Error:               func(w http.ResponseWriter, r *http.Request, status int, reason error) {},
 	ReadBufferSize:      4096,
 	WriteBufferSize:     4096,
-	Type:                "self",
 }
 
 // Conn is a struct that holds the websocket connection
@@ -127,9 +115,6 @@ func New(handler func(conn *Conn, ctx *pine.Ctx), config ...Config) pine.Handler
 		if userConfig.HandshakeTimeout != 0 {
 			cfg.HandshakeTimeout = userConfig.HandshakeTimeout
 		}
-		if userConfig.Type != "" {
-			cfg.Type = userConfig.Type
-		}
 	} else {
 		cfg = defaultConfig
 	}
@@ -151,9 +136,6 @@ func New(handler func(conn *Conn, ctx *pine.Ctx), config ...Config) pine.Handler
 			return err
 		}
 
-		if cfg.Type != "self" {
-			panic("ChannelType must be 'self'")
-		}
 		conn := acquireConn()
 		conn.Conn = Conn
 		defer releaseConn(conn)

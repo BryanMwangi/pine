@@ -37,8 +37,10 @@ type responseWriterWrapper struct {
 
 type Server struct {
 	mutex sync.Mutex
+
 	//standard http server
 	server *http.Server
+
 	//here you can customize shut down events.
 	//For future releases, we will add connection pools and
 	//shutting them down will be here
@@ -167,6 +169,7 @@ type Cookie struct {
 
 	//determines whether requests over http only can send the cookie
 	HttpOnly bool
+
 	//Cookies from the same domain can only be used on the specified domain
 	//Eg: cookies from app.example.com can only be used by app.example.com
 	//if you want all domains associated with example.com you can set this to
@@ -179,9 +182,11 @@ type Cookie struct {
 	// 2 - SameSite=None
 	//It will alwas default to Lax
 	SameSite SameSite
+
 	//All cookie data in string format. You do not need to set this
 	//Pine can handle it for you
 	Raw bool
+
 	//Pine will also take care of this
 	Unparsed []string
 }

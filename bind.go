@@ -57,8 +57,6 @@ func bind(input string, destination interface{}) error {
 	typ := reflect.TypeOf(destination)
 	val := reflect.ValueOf(destination)
 
-	// Check if v is a pointer
-	// Pointer type is not handled at this time and will return an error
 	if typ.Kind() != reflect.Ptr {
 		return ErrPtr
 	}

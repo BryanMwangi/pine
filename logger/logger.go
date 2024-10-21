@@ -33,7 +33,6 @@ var (
 // we initialise this in the target project by calling logger.init and passing in
 // the parameters required to store the log data
 func Init(fileName string, maxSize int64) error {
-
 	//if the file exists we continue set up to ensure all logs are written in the
 	//suggested file
 	log.SetOutput(&logger{
@@ -48,7 +47,7 @@ func (l *logger) Write(p []byte) (n int, err error) {
 	writeLen := int64(len(p))
 	if writeLen > l.max() {
 		return 0, fmt.Errorf(
-			"write length %d exceeds maximum file size %d", writeLen, l.max(),
+			"write length %d exceeds maximum item size %d", writeLen, l.max(),
 		)
 	}
 	if l.file == nil {
@@ -110,14 +109,6 @@ func Error(message interface{}) {
 	log.Println("ERROR: " + message.(string))
 }
 
-func RuntimeError(message interface{}) {
-	fmt.Println(Red + message.(string) + Reset)
-}
-
-func RuntimeInfo(message interface{}) {
-	fmt.Println(White + message.(string) + Reset)
-}
-
 func Warning(message interface{}) {
 	fmt.Println(Yellow + message.(string) + Reset)
 	log.Println("WARN : " + message.(string))
@@ -126,4 +117,12 @@ func Warning(message interface{}) {
 func Success(message interface{}) {
 	fmt.Println(Green + message.(string) + Reset)
 	log.Println("SUCCESS: " + message.(string))
+}
+
+func RuntimeError(message interface{}) {
+	fmt.Println(Red + message.(string) + Reset)
+}
+
+func RuntimeInfo(message interface{}) {
+	fmt.Println(White + message.(string) + Reset)
 }

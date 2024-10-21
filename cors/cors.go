@@ -10,29 +10,24 @@ import (
 
 type Config struct {
 	// AllowedOrigins is a list of origins a cross-domain request can be executed from.
-	// If the special "*" value is present in the list, all origins will be allowed.
+	// If set to "*", all origins will be allowed.
 	// An origin may contain a wildcard (*) to replace 0 or more characters
 	// (i.e.: http://*.domain.com). Usage of wildcards implies a small performance penalty.
 	// Only one wildcard can be used per origin.
 	//
-	// Default value is ["*"]
+	// Default value is []string{"*"}
 	AllowedOrigins []string
-
-	// AllowOriginFunc is a custom function to validate the origin. It take the origin
-	// as argument and returns true if allowed or false otherwise. If this option is
-	// set, the content of AllowedOrigins is ignored.
-	//
-	// Default value is nil
-	AllowOriginFunc func(origin string) bool
 
 	// AllowedMethods is a list of methods the client is allowed to use with
 	// cross-domain requests.
 	//
 	// Default value is simple methods ["GET", "POST", "PUT", "PATCH", "DELETE"]
+	// This is the same as in the server.config.DefaultMethods
 	AllowedMethods []string
 
 	// AllowedHeaders is list of non simple headers the client is allowed to use with
 	// cross-domain requests.
+	//
 	// If the special "*" value is present in the list, all headers will be allowed.
 	// Default value is "Content-Type, Authorization"
 	AllowedHeaders string
@@ -43,36 +38,31 @@ type Config struct {
 	// Default value is ""
 	ExposedHeaders string
 
+	// AllowedCredentials refers to whether the request can include user credentials
+	// like cookies, HTTP authentication or client side SSL certificates.
+	//
+	// Default value is false
 	AllowCredentials bool
-	// MaxAge indicates how long (in seconds) the results of a preflight request
-	// can be cached
+
+	// MaxAge referes to how long the results of a preflight request can be cached
+	// by the browser. This is always in seconds.
+	//
 	// Default value is 0, i.e. the browser does not cache the result.
 	// if set to 0, max-age is set to 5 seconds which is the default value set
-	// by the browsers.
+	// by most browsers.
 	MaxAge int
-}
-
-var defaultConfig = Config{
-	AllowedOrigins:  []string{"*"},
-	AllowOriginFunc: nil,
-	AllowedMethods: []string{
-		pine.MethodGet,
-		pine.MethodHead,
-		pine.MethodPost,
-		pine.MethodPut,
-		pine.MethodPatch,
-		pine.MethodDelete,
-		pine.MethodOptions,
-	},
-	AllowedHeaders:   "Content-Type, Authorization",
-	ExposedHeaders:   "",
-	MaxAge:           0,
-	AllowCredentials: false,
 }
 
 func New(config ...Config) pine.Middleware {
 	var setConfig Config
-	var cfg Config
+	cfg := Config{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   pine.DefaultMethods,
+		AllowedHeaders:   "Content-Type, Authorization",
+		ExposedHeaders:   "",
+		MaxAge:           0,
+		AllowCredentials: false,
+	}
 
 	if len(config) > 0 {
 		setConfig = config[0]
@@ -87,8 +77,6 @@ func New(config ...Config) pine.Middleware {
 				}
 				cfg.AllowedOrigins = append(cfg.AllowedOrigins, origin)
 			}
-		} else {
-			cfg.AllowedOrigins = defaultConfig.AllowedOrigins
 		}
 
 		// Overwrite the default Allowed Methods with the user Allowed Methods
@@ -105,16 +93,8 @@ func New(config ...Config) pine.Middleware {
 				cfg.AllowedMethods = append(cfg.AllowedMethods, method)
 			}
 			if len(cfg.AllowedMethods) == 0 {
-				cfg.AllowedMethods = defaultConfig.AllowedMethods
+				cfg.AllowedMethods = pine.DefaultMethods
 			}
-		} else {
-			cfg.AllowedMethods = defaultConfig.AllowedMethods
-		}
-
-		if setConfig.AllowOriginFunc != nil {
-			cfg.AllowOriginFunc = setConfig.AllowOriginFunc
-		} else {
-			cfg.AllowOriginFunc = defaultConfig.AllowOriginFunc
 		}
 
 		// Overwrite the default Allowed Headers with the user Allowed Headers
@@ -122,31 +102,21 @@ func New(config ...Config) pine.Middleware {
 			setConfig.AllowedHeaders = strings.TrimSpace(setConfig.AllowedHeaders)
 			setConfig.AllowedHeaders = strings.ToLower(setConfig.AllowedHeaders)
 			cfg.AllowedHeaders = setConfig.AllowedHeaders
-		} else {
-			cfg.AllowedHeaders = defaultConfig.AllowedHeaders
 		}
 
 		// Overwrite the default Exposed Headers with the user Exposed Headers
 		if setConfig.ExposedHeaders != "" {
 			cfg.ExposedHeaders = setConfig.ExposedHeaders
-		} else {
-			cfg.ExposedHeaders = defaultConfig.ExposedHeaders
 		}
 
 		if setConfig.AllowCredentials {
 			cfg.AllowCredentials = setConfig.AllowCredentials
-		} else {
-			cfg.AllowCredentials = defaultConfig.AllowCredentials
 		}
 
 		// Overwrite the default MaxAge with the user MaxAge
 		if setConfig.MaxAge != 0 {
 			cfg.MaxAge = setConfig.MaxAge
-		} else {
-			cfg.MaxAge = defaultConfig.MaxAge
 		}
-	} else {
-		cfg = defaultConfig
 	}
 
 	return func(next pine.Handler) pine.Handler {
