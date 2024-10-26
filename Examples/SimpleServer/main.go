@@ -9,7 +9,15 @@ import (
 func main() {
 	app := pine.New()
 	app.Get("/hello", func(c *pine.Ctx) error {
-		return c.SendString("Hello World!")
+		c.Set("Server", "Pine")
+		return c.SendString("Hello, World!")
+	})
+
+	app.Get("/json", func(c *pine.Ctx) error {
+		c.Set("Server", "Pine")
+		return c.JSON(map[string]string{
+			"message": "Hello, World!",
+		})
 	})
 
 	// Start the server on port 3000
