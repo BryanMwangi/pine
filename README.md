@@ -1,6 +1,6 @@
 # Pine
 
-Simple Go server framework built on the same concepts of ease of use such as Fiber golang or Express JS
+Simple Go server framework built on the same concepts of ease of use such as Express JS
 
 <!-- GETTING STARTED -->
 
