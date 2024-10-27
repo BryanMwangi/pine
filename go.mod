@@ -1,6 +1,6 @@
 module github.com/BryanMwangi/pine
 
-go 1.22.5
+go 1.23
 
 require github.com/google/uuid v1.6.0
 
@@ -9,4 +9,4 @@ require (
 	github.com/gorilla/websocket v1.5.3
 )
 
-require golang.org/x/sys v0.4.0 // indirect
+require golang.org/x/sys v0.26.0 // indirect

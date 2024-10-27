@@ -152,20 +152,33 @@ func New(config ...Config) pine.Middleware {
 			// process the rate limit checker
 			e, err := cfg.process(c)
 
+			if cfg.ShowHeader {
+				var maxrequest, remaining int
+				var reset string
+
+				if e != nil {
+					maxrequest = cfg.MaxRequests
+					remaining = e.remaining
+					reset = e.reset.Format(http.TimeFormat)
+				} else {
+					maxrequest = 0
+					remaining = 0
+					reset = "0"
+				}
+
+				c.Set(xrateLimitLimit, maxrequest)
+				c.Set(xrateLimitRemaining, remaining)
+				c.Set(xrateLimitReset, reset)
+			}
+
 			if err == ErrBlacklist {
-				c.Set(xrateLimitLimit, 0)
-				c.Set(xrateLimitRemaining, 0)
-				c.Set(xrateLimitReset, 0)
 				return cfg.Handler(c)
 			}
+
 			if e == nil {
 				return next(c)
 			}
-			if cfg.ShowHeader {
-				c.Set(xrateLimitLimit, cfg.MaxRequests)
-				c.Set(xrateLimitRemaining, e.remaining)
-				c.Set(xrateLimitReset, e.reset.Format(http.TimeFormat))
-			}
+
 			if e.remaining == 0 {
 				return cfg.Handler(c)
 			}
