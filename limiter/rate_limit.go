@@ -170,15 +170,17 @@ func New(config ...Config) pine.Middleware {
 				c.Set(xrateLimitRemaining, remaining)
 				c.Set(xrateLimitReset, reset)
 			}
-
+			// IP is blacklisted
 			if err == ErrBlacklist {
 				return cfg.Handler(c)
 			}
 
+			// IP is whitelisted
 			if e == nil {
 				return next(c)
 			}
 
+			// IP is rate limited. Rate limit is exceeded
 			if e.remaining == 0 {
 				return cfg.Handler(c)
 			}
