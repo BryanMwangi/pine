@@ -145,7 +145,7 @@ func New(config ...Config) pine.Middleware {
 			cfg.Handler = userConfig.Handler
 		}
 	}
-	cfg.store = cache.New(cfg.Window)
+	cfg.store = cache.New()
 
 	return func(next pine.Handler) pine.Handler {
 		return func(c *pine.Ctx) error {
@@ -217,7 +217,7 @@ func (cfg *Config) process(c *pine.Ctx) (*entry, error) {
 			reset:     time.Now().Add(cfg.Window),
 			remaining: cfg.MaxRequests,
 		}
-		cfg.store.Set(key, e)
+		cfg.store.Set(key, e, cfg.Window)
 		return e, nil
 	}
 	// we convert the entry to the rate limit entry
@@ -233,7 +233,11 @@ func (cfg *Config) process(c *pine.Ctx) (*entry, error) {
 	// reduce the remaining requests
 	e.remaining--
 
+	resetTime := e.reset.UnixMilli() - time.Now().UnixMilli()
+	if resetTime < 0 {
+		resetTime = 0
+	}
 	// update the cache with the new rate limit entry
-	cfg.store.Set(key, e)
+	cfg.store.Set(key, e, time.Duration(resetTime)*time.Millisecond)
 	return e, nil
 }

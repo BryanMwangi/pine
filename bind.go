@@ -126,8 +126,10 @@ func isZeroValue(val reflect.Value) bool {
 	switch val.Kind() {
 	case reflect.String:
 		return val.String() == ""
-	case reflect.Int, reflect.Int64, reflect.Float64:
-		return val.Int() == 0 || val.Float() == 0.0
+	case reflect.Int, reflect.Int64:
+		return val.Int() == 0
+	case reflect.Float32, reflect.Float64:
+		return val.Float() == 0.0
 	case reflect.Bool:
 		return !val.Bool()
 	case reflect.Slice, reflect.Array:

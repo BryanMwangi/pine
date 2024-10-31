@@ -108,6 +108,11 @@ type Config struct {
 	// Optional. Default: DefaultMethods
 	RequestMethods []string
 
+	// UploadPath is the path where uploaded files will be saved
+	//
+	// Default: ./uploads
+	UploadPath string
+
 	// TLSConfig is the configuration for TLS.
 	TLSConfig TLSConfig
 }
@@ -281,6 +286,7 @@ func New(config ...Config) *Server {
 		JSONDecoder:      json.Unmarshal,
 		RequestMethods:   DefaultMethods,
 		TLSConfig:        defaultTLSConfig,
+		UploadPath:       "./uploads/",
 	}
 
 	if len(config) > 0 {
@@ -313,6 +319,9 @@ func New(config ...Config) *Server {
 		}
 		if userConfig.TLSConfig.ServeTLS {
 			cfg.TLSConfig = userConfig.TLSConfig
+		}
+		if userConfig.UploadPath != "" {
+			cfg.UploadPath = userConfig.UploadPath
 		}
 	}
 
@@ -388,13 +397,13 @@ func (server *Server) Post(path string, handlers ...Handler) {
 	server.AddRoute(MethodPost, path, handlers...)
 }
 func (server *Server) Put(path string, handlers ...Handler) {
-	server.AddRoute(MethodPost, path, handlers...)
+	server.AddRoute(MethodPut, path, handlers...)
 }
 func (server *Server) Patch(path string, handlers ...Handler) {
-	server.AddRoute(MethodPost, path, handlers...)
+	server.AddRoute(MethodPatch, path, handlers...)
 }
 func (server *Server) Delete(path string, handlers ...Handler) {
-	server.AddRoute(MethodPost, path, handlers...)
+	server.AddRoute(MethodDelete, path, handlers...)
 }
 
 func (server *Server) Options(path string, handlers ...Handler) {
@@ -463,8 +472,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Check if the request body is too large
-		r.Body = http.MaxBytesReader(w, r.Body, server.config.BodyLimit)
+		server.limitMaxRequestBodySize(w, r)
 
 		// Proceed to check if the method matches the method in the route
 		if matchedRoute.Method != r.Method {
@@ -486,6 +494,11 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (server *Server) limitMaxRequestBodySize(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, server.config.BodyLimit)
+	r.ParseMultipartForm(server.config.BodyLimit)
+}
+
 // Use method is for specifying middleware to be used on specific routes
 // for example you could have an authentication middleware that checks for cookies with
 // every request to authenticate the user request
@@ -502,9 +515,12 @@ func (server *Server) Use(middleware Middleware) {
 // apply middleware to the handler
 func (server *Server) applyMiddleware(route *Route) {
 	for k, handler := range route.Handlers {
-		for _, middleware := range server.middleware {
-			route.Handlers[k] = middleware(handler)
+		wrappedHandler := handler
+
+		for i := len(server.middleware) - 1; i >= 0; i-- {
+			wrappedHandler = server.middleware[i](wrappedHandler)
 		}
+		route.Handlers[k] = wrappedHandler
 	}
 }
 
@@ -524,6 +540,7 @@ func (c *Ctx) Next() error {
 	}
 	// Increment handler index
 	c.indexHandler++
+
 	// Check if we have more handlers to execute
 	if c.indexHandler >= len(c.route.Handlers) {
 		return fmt.Errorf("no more handlers to execute")
