@@ -113,6 +113,21 @@ type Config struct {
 	// Default: ./uploads
 	UploadPath string
 
+	// StaticPath is the path where static files will be served
+	//
+	// Default: "static"
+	StaticPath string
+
+	// ViewPath is the path where view files will be served
+	//
+	// Default: "views"
+	ViewPath string
+
+	// Engine is the template engine to use
+	//
+	// Default: html
+	Engine string
+
 	// TLSConfig is the configuration for TLS.
 	TLSConfig TLSConfig
 }
