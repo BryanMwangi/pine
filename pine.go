@@ -371,40 +371,6 @@ func (server *Server) AddRoute(method, path string, handlers ...Handler) {
 	server.stack[methodIndex] = append(server.stack[methodIndex], route)
 }
 
-// this is called on start up so that the server knows how to match routes and methods
-func matchRoute(routePath, requestPath string) (bool, map[string]string) {
-	if routePath == requestPath {
-		return true, make(map[string]string)
-	}
-
-	// Example for a single parameter (e.g., "/user/:id")
-	// multiple parameters in dynamic routes can also be used
-	// for example /user/:id/record/:recordId
-	if len(routePath) > 0 && routePath[0] == '/' && len(requestPath) > 0 && requestPath[0] == '/' {
-		routeSegments := splitPath(routePath)
-		requestSegments := splitPath(requestPath)
-
-		if len(routeSegments) == len(requestSegments) {
-			params := make(map[string]string)
-			for i, segment := range routeSegments {
-				if segment[0] == ':' {
-					params[segment[1:]] = requestSegments[i]
-				} else if segment != requestSegments[i] {
-					return false, nil
-				}
-			}
-			return true, params
-		}
-	}
-	return false, nil
-}
-
-// This is used to split the path into smaller chunks
-// useful for getting queries and paramaters on specific paths
-func splitPath(path string) []string {
-	return strings.Split(strings.Trim(path, "/"), "/")
-}
-
 func (server *Server) Get(path string, handlers ...Handler) {
 	server.AddRoute(MethodGet, path, handlers...)
 }
@@ -451,6 +417,40 @@ func (server *Server) Start(address string) error {
 	return httpServer.ListenAndServe()
 }
 
+// This is used to split the path into smaller chunks
+// useful for getting queries and paramaters on specific paths
+func splitPath(path string) []string {
+	return strings.Split(strings.Trim(path, "/"), "/")
+}
+
+// this is called on start up so that the server knows how to match routes and methods
+func matchRoute(routePath, requestPath string) (bool, map[string]string) {
+	if routePath == requestPath {
+		return true, make(map[string]string)
+	}
+
+	// Example for a single parameter (e.g., "/user/:id")
+	// multiple parameters in dynamic routes can also be used
+	// for example /user/:id/record/:recordId
+	if len(routePath) > 0 && routePath[0] == '/' && len(requestPath) > 0 && requestPath[0] == '/' {
+		routeSegments := splitPath(routePath)
+		requestSegments := splitPath(requestPath)
+
+		if len(routeSegments) == len(requestSegments) {
+			params := make(map[string]string)
+			for i, segment := range routeSegments {
+				if segment[0] == ':' {
+					params[segment[1:]] = requestSegments[i]
+				} else if segment != requestSegments[i] {
+					return false, nil
+				}
+			}
+			return true, params
+		}
+	}
+	return false, nil
+}
+
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wrappedWriter := &responseWriterWrapper{ResponseWriter: w}
 
@@ -469,6 +469,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if matched, params := matchRoute(route.Path, r.URL.Path); matched {
 				matchedRoute = route
 				ctx.params = params
+				ctx.route = route
 				break
 			}
 		}
