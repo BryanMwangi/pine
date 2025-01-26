@@ -20,6 +20,10 @@ func main() {
 		})
 	})
 
+	app.Get("/*", func(c *pine.Ctx) error {
+		return c.SendString(c.Request.URL.Path)
+	})
+
 	// Start the server on port 3000
 	log.Fatal(app.Start(":3001"))
 }

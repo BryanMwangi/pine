@@ -448,6 +448,25 @@ func matchRoute(routePath, requestPath string) (bool, map[string]string) {
 			return true, params
 		}
 	}
+
+	// we can also handle the case where the a wildcard route is used
+	// and the user wishes to have their own route matching
+	//
+	// for example if you have a dynamic file system API and files and folders
+	// change often, you would want to collect the request as is and check for existing
+	// files and folders
+	//
+	// you can do this by using a wildcard route
+	//
+	// app.Get("/*", func(c *pine.Ctx) error {
+	//	return c.SendString(c.Request.URL.Path)
+	// })
+	//
+	// this will match any request and send the request path as the response
+	if routePath == "/*" {
+		return true, make(map[string]string)
+	}
+
 	return false, nil
 }
 
