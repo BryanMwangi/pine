@@ -125,9 +125,8 @@ func New(config ...Config) pine.Middleware {
 		if userConfig.Window != 0 {
 			cfg.Window = userConfig.Window
 		}
-		if userConfig.ShowHeader {
-			cfg.ShowHeader = userConfig.ShowHeader
-		}
+		cfg.ShowHeader = userConfig.ShowHeader
+
 		if userConfig.KeyGen != nil {
 			cfg.KeyGen = userConfig.KeyGen
 		}
