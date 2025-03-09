@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -710,14 +711,33 @@ func (c *Ctx) Header(key string) string {
 // If you notice the IP address is sometimes different from the actual IP address
 // please open an issue and we will look into it
 func (c *Ctx) IP() string {
-	IPAddress := c.Request.Header.Get("X-Real-Ip")
-	if IPAddress == "" {
-		IPAddress = c.Request.Header.Get("X-Forwarded-For")
+	// Proxies like Nginx use X-Real-Ip header to forward the client IP
+	ip := c.Request.Header.Get("X-Real-Ip")
+	if ip != "" {
+		return ip
 	}
-	if IPAddress == "" {
-		IPAddress = c.Request.RemoteAddr
+
+	// When using platforms like Cloudflare, the IP address is hidden in the CF-Connecting-IP header
+	ip = c.Request.Header.Get("CF-Connecting-IP")
+	if ip != "" {
+		return ip
 	}
-	return IPAddress
+	// Platforms like Fastly and AWS and fly.io use X-Forwarded-For header to forward the client IP
+	//
+	// This is a comma-separated list of IP addresses, the left-most being the original client IP
+	ip = c.Request.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		ips := strings.Split(ip, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	// Fallback: Extract IP from RemoteAddr when running bare bones
+	ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		return c.Request.RemoteAddr
+	}
+
+	return ip
 }
 
 // This can be used to set the local  values of a request
