@@ -22,5 +22,5 @@ func main() {
 		return c.SendString("pong")
 	})
 
-	log.Fatal(app.Start(":3000"))
+	log.Fatal(app.Start(":3001"))
 }

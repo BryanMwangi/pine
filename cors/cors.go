@@ -68,6 +68,10 @@ func New(config ...Config) pine.Middleware {
 		setConfig = config[0]
 		// Overwrite the default Allowed Origins with the user Allowed Origins
 		if setConfig.AllowedOrigins != nil && setConfig.AllowedOrigins[0] != "*" {
+			// clear default origins
+			cfg.AllowedOrigins = nil
+
+			// add user origins
 			for _, origin := range setConfig.AllowedOrigins {
 				origin = strings.TrimSpace(origin)
 				origin = strings.ToLower(origin)
