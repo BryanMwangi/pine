@@ -152,8 +152,11 @@ func logHello2() error {
 We aim to bring Pine to the same level as other popular frameworks. Some of the features we plan to add in the future include:
 
 - Session support and pooling
-- Caching support
-- More middlewares out of the box such as CSRF, Rate Limiting, etc.
+- More middlewares out of the box such as CSRF etc.
+- Improvements to routing
+- Improvements to networking to improve performance from a low level approach
+- Add HTML rendering support
+- Add support for HTTP/3
 
 <!-- CONTRIBUTING -->
 
