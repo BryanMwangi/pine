@@ -19,8 +19,16 @@ func (c *Ctx) FormFile(key string) (multipart.File, *multipart.FileHeader, error
 	return c.Request.FormFile(key)
 }
 
-func (c *Ctx) SaveFile(file multipart.File, fh *multipart.FileHeader) error {
-	defer file.Close() // Ensure the file is closed after all operations.
+// SaveFile saves the file to the specified path or the default upload path
+// if no path is specified
+func (c *Ctx) SaveFile(fh *multipart.FileHeader, path ...string) error {
+	var file multipart.File
+
+	file, err := fh.Open()
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
 	// Extract filename from header directly, which is more reliable.
 	fileName := fh.Filename
@@ -39,8 +47,14 @@ func (c *Ctx) SaveFile(file multipart.File, fh *multipart.FileHeader) error {
 		return ErrFileName
 	}
 
-	// Set the desired file path, for example, saving all files to a specific directory.
-	filePath := filepath.Join(c.Server.config.UploadPath, fileName)
+	var filePath string
+	if len(path) > 0 {
+		// Use the specified path
+		filePath = path[0]
+	} else {
+		// Set the desired file path, for example, saving all files to a specific directory.
+		filePath = filepath.Join(c.Server.config.UploadPath, fileName)
+	}
 
 	// Create the necessary directory structure for the file path.
 	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {

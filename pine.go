@@ -740,6 +740,44 @@ func (c *Ctx) IP() string {
 	return ip
 }
 
+// This is used to retrieve the IP addresses from the client request
+//
+// This is particularly useful when a request is forwarded through proxies and
+// you want to get all IP addresses from the request
+func (c *Ctx) IPs() []string {
+	// Proxies like Nginx use X-Real-Ip header to forward the client IP
+	ips := c.Request.Header.Get("X-Real-Ip")
+	if ips != "" {
+		return strings.Split(ips, ",")
+	}
+
+	// When using platforms like Cloudflare, the IP address is hidden in the CF-Connecting-IP header
+	ips = c.Request.Header.Get("CF-Connecting-IP")
+	if ips != "" {
+		return strings.Split(ips, ",")
+	}
+	// Platforms like Fastly and AWS and fly.io use X-Forwarded-For header to forward the client IP
+	//
+	// This is a comma-separated list of IP addresses, the left-most being the original client IP
+	ips = c.Request.Header.Get("X-Forwarded-For")
+	if ips != "" {
+		return strings.Split(ips, ",")
+	}
+
+	// Fallback: Extract IP from RemoteAddr when running bare bones
+	ip, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		return []string{c.Request.RemoteAddr}
+	}
+
+	return []string{ip}
+}
+
+// This is used to retrieve the remote address of the client
+func (c *Ctx) RemoteAddr() string {
+	return c.Request.RemoteAddr
+}
+
 // This can be used to set the local  values of a request
 // This is particulary useful when unpacking data from a cookie
 // Eg: You can parse a JWT token and decode the data inside it
@@ -769,10 +807,13 @@ func (c *Ctx) Locals(key string, value ...interface{}) interface{} {
 }
 
 // used to extract params from a specified request
-// Eg: app.Get("/hello/:user",func(c *Pine.Ctx)error{
-// user:=c.Params("user")
 //
-//		return c.SendString("hello"+user)
+//	Eg:
+//
+//	app.Get("/hello/:user", func(c *pine.Ctx) error {
+//	user:=c.Params("user")
+//
+//	return c.SendString("hello"+user)
 //	})
 func (c *Ctx) Params(key string) string {
 	return c.params[key]

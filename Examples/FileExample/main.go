@@ -16,12 +16,11 @@ func main() {
 	}))
 
 	app.Post("/upload", func(c *pine.Ctx) error {
-		file, header, err := c.FormFile("file")
+		_, header, err := c.FormFile("file")
 		if err != nil {
 			return c.SendStatus(http.StatusInternalServerError)
 		}
-		defer file.Close()
-		err = c.SaveFile(file, header)
+		err = c.SaveFile(header)
 		if err != nil {
 			return c.SendStatus(http.StatusInternalServerError)
 		}

@@ -38,13 +38,13 @@ func TestSaveFile(t *testing.T) {
 	ctx := &Ctx{Request: req, Server: &Server{config: Config{UploadPath: "./uploads"}}}
 
 	// Retrieve the uploaded file from the request.
-	file, fh, err := ctx.FormFile("file")
+	_, fh, err := ctx.FormFile("file")
 	if err != nil {
 		t.Fatalf("Failed to retrieve form file: %v", err)
 	}
 
 	// Save the file using SaveFile.
-	err = ctx.SaveFile(file, fh)
+	err = ctx.SaveFile(fh)
 	if err != nil {
 		t.Fatalf("Failed to save file: %v", err)
 	}
