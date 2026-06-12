@@ -69,20 +69,15 @@ func (l *logger) max() int64 {
 }
 
 func (l *logger) openExistingOrNew() error {
-	//check if the log file is ready or start a new one
-	filename := l.Filename
-	_, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		return fmt.Errorf(err.Error() + " in logger.openExistingOrNew")
-	}
-	info, err := os.Stat(filename)
+	info, err := os.Stat(l.Filename)
 	if os.IsNotExist(err) {
 		return l.openNew()
 	}
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		// if we fail to open the old log file for some reason, just ignore
-		// it and open a new log file.
+		return l.openNew()
+	}
+	file, err := os.OpenFile(l.Filename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
 		return l.openNew()
 	}
 	l.file = file
@@ -91,38 +86,40 @@ func (l *logger) openExistingOrNew() error {
 }
 
 func (l *logger) openNew() error {
-	filename := l.Filename
-	_, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	file, err := os.OpenFile(l.Filename, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		return fmt.Errorf(err.Error() + " in Logger.openNew")
+		return fmt.Errorf("%s in Logger.openNew", err)
 	}
+	l.file = file
+	l.size = 0
 	return nil
 }
 
-func Info(message interface{}) {
-	fmt.Println(White + message.(string) + Reset)
-	log.Println("INFO: " + message.(string))
+func Info(message ...any) {
+	fmt.Println(White + fmt.Sprint(message...) + Reset)
+	log.Println("INFO: " + fmt.Sprint(message...))
 }
 
-func Error(message interface{}) {
-	fmt.Println(Red + message.(string) + Reset)
-	log.Println("ERROR: " + message.(string))
+func Error(message ...any) {
+	fmt.Println(Red + fmt.Sprint(message...) + Reset)
+	log.Println("ERROR: " + fmt.Sprint(message...))
 }
 
-func Warning(message interface{}) {
-	fmt.Println(Yellow + message.(string) + Reset)
-	log.Println("WARN : " + message.(string))
+func Warning(message ...any) {
+	fmt.Println(Yellow + fmt.Sprint(message...) + Reset)
+	log.Println("WARN : " + fmt.Sprint(message...))
 }
 
-func Success(message interface{}) {
-	fmt.Println(Green + message.(string) + Reset)
-	log.Println("SUCCESS: " + message.(string))
+func Success(message ...any) {
+	fmt.Println(Green + fmt.Sprint(message...) + Reset)
+	log.Println("SUCCESS: " + fmt.Sprint(message...))
 }
 
-func RuntimeError(message interface{}) {
-	fmt.Println(Red + message.(string) + Reset)
+func RuntimeError(message ...any) {
+	fmt.Println(Red + fmt.Sprint(message...) + Reset)
+	log.Println("RUNTIME ERROR: " + fmt.Sprint(message...))
 }
 
-func RuntimeInfo(message interface{}) {
-	fmt.Println(White + message.(string) + Reset)
+func RuntimeInfo(message ...any) {
+	fmt.Println(White + fmt.Sprint(message...) + Reset)
 }
