@@ -47,12 +47,13 @@ func (c *Ctx) SaveFile(fh *multipart.FileHeader, path ...string) error {
 		return ErrFileName
 	}
 
+	// Strip directory components to prevent path traversal attacks.
+	fileName = filepath.Base(filepath.Clean(fileName))
+
 	var filePath string
 	if len(path) > 0 {
-		// Use the specified path
 		filePath = path[0]
 	} else {
-		// Set the desired file path, for example, saving all files to a specific directory.
 		filePath = filepath.Join(c.Server.config.UploadPath, fileName)
 	}
 

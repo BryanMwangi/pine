@@ -57,10 +57,12 @@ var defaultConfig = Config{
 	SubprotocolsAllowed: []string{""},
 	EnableCompression:   true,
 	HandshakeTimeout:    10 * time.Second,
-	CheckOrigin:         func(r *http.Request) bool { return true },
-	Error:               func(w http.ResponseWriter, r *http.Request, status int, reason error) {},
-	ReadBufferSize:      4096,
-	WriteBufferSize:     4096,
+	// CheckOrigin is intentionally nil here so the Gorilla upgrader uses its
+	// built-in safe default: it rejects upgrades where the Origin header does
+	// not match the Host header, preventing cross-site WebSocket hijacking.
+	Error:           func(w http.ResponseWriter, r *http.Request, status int, reason error) {},
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
 }
 
 // Conn is a struct that holds the websocket connection
@@ -122,11 +124,15 @@ func New(handler func(conn *Conn, ctx *pine.Ctx), config ...Config) pine.Handler
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:    cfg.ReadBufferSize,
 		WriteBufferSize:   cfg.WriteBufferSize,
-		CheckOrigin:       cfg.CheckOrigin,
 		Error:             cfg.Error,
 		Subprotocols:      cfg.SubprotocolsAllowed,
 		EnableCompression: cfg.EnableCompression,
 		HandshakeTimeout:  cfg.HandshakeTimeout,
+	}
+	// Only override CheckOrigin when the user explicitly provided one.
+	// When nil, Gorilla's safe default applies (Origin must match Host).
+	if cfg.CheckOrigin != nil {
+		upgrader.CheckOrigin = cfg.CheckOrigin
 	}
 
 	return func(ctx *pine.Ctx) error {

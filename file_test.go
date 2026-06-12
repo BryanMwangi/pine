@@ -63,6 +63,50 @@ func TestSaveFile(t *testing.T) {
 	}
 }
 
+func TestSaveFile_PathTraversal(t *testing.T) {
+	uploadDir := t.TempDir()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "../../evil.txt")
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+	part.Write([]byte("malicious content"))
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	ctx := &Ctx{Request: req, Server: &Server{config: Config{UploadPath: uploadDir}}}
+
+	_, fh, err := ctx.FormFile("file")
+	if err != nil {
+		t.Fatalf("Failed to retrieve form file: %v", err)
+	}
+
+	err = ctx.SaveFile(fh)
+	if err != nil {
+		t.Fatalf("SaveFile returned unexpected error: %v", err)
+	}
+
+	// The file must be inside uploadDir, not at the traversal destination.
+	expected := filepath.Join(uploadDir, "evil.txt")
+	if _, statErr := os.Stat(expected); os.IsNotExist(statErr) {
+		t.Errorf("expected file at %s but it was not created", expected)
+	}
+
+	// Traversal destination must not exist.
+	traversal := filepath.Join(uploadDir, "../../evil.txt")
+	absTraversal, _ := filepath.Abs(traversal)
+	absUpload, _ := filepath.Abs(uploadDir)
+	if _, statErr := os.Stat(absTraversal); !os.IsNotExist(statErr) {
+		// Only flag this if the traversal path resolves outside uploadDir.
+		if len(absTraversal) < len(absUpload) || absTraversal[:len(absUpload)] != absUpload {
+			t.Errorf("path traversal: file exists outside upload dir at %s", absTraversal)
+		}
+	}
+}
+
 // TODO: Fix this tests
 //
 // func TestSendFile(t *testing.T) {
