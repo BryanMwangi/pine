@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -108,6 +109,7 @@ func LiveReload(server *pine.Server, engine *Engine) error {
 		_ = websocket.Watch(server.ViewPath(), done, func(absPath string) {
 			ext := strings.ToLower(filepath.Ext(absPath))
 			if ext == ".html" || ext == ".gohtml" || ext == ".tmpl" {
+				fmt.Println("Rebuilding templates...")
 				trigger()
 			}
 		})
