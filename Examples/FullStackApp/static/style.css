@@ -1,0 +1,182 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f5f5;
+  color: #222;
+  min-height: 100vh;
+}
+
+/* ---- nav ---- */
+nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #111;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+}
+.nav-logo {
+  width: 2rem;
+  height: 2rem;
+}
+
+.nav-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav-links a {
+  color: #ccc;
+  text-decoration: none;
+  margin-left: 1.25rem;
+  font-size: 0.95rem;
+  transition: color 0.15s;
+}
+.nav-links a:hover {
+  color: #fff;
+}
+
+/* ---- layout ---- */
+.container {
+  max-width: 680px;
+  margin: 3rem auto;
+  padding: 0 1rem;
+}
+
+/* ---- hero ---- */
+.hero {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.hero h1 {
+  font-size: 2rem;
+  margin-bottom: 0.75rem;
+}
+.hero p {
+  color: #555;
+  margin-bottom: 1.5rem;
+}
+
+/* ---- feature cards ---- */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.card h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+.card p {
+  font-size: 0.875rem;
+  color: #555;
+  line-height: 1.5;
+}
+.card code {
+  background: #f0f0f0;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+/* ---- button ---- */
+.btn {
+  display: inline-block;
+  background: #111;
+  color: #fff;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn:hover {
+  background: #333;
+}
+
+/* ---- add form ---- */
+.add-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.add-form input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.add-form input:focus {
+  border-color: #111;
+}
+
+/* ---- todo list ---- */
+.todo-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  transition: opacity 0.2s;
+}
+.todo-item.done {
+  opacity: 0.5;
+}
+.todo-item.done .todo-title {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.todo-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #111;
+  flex-shrink: 0;
+}
+.todo-title {
+  flex: 1;
+  font-size: 0.95rem;
+}
+.todo-date {
+  font-size: 0.75rem;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.empty-msg {
+  color: #888;
+  text-align: center;
+  margin-top: 2rem;
+}

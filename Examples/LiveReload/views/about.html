@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 4rem auto; color: #222; line-height: 1.6; }
+    nav { margin-bottom: 2rem; }
+    nav a { margin-right: 1rem; color: #0070f3; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    ol { padding-left: 1.25rem; }
+    li { margin: .4rem 0; }
+    code { background: #f3f4f6; padding: .1em .35em; border-radius: 4px; font-size: .9em; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+  </nav>
+
+  <h1>{{.Heading}}</h1>
+  <p>{{.Body}}</p>
+
+  <h2>How it works</h2>
+  <ol>
+    <li>
+      Set <code>ReloadTemplates: true</code> in <code>pine.Config</code>, then
+      call <code>render.Setup(app)</code> — that's all.
+    </li>
+    <li>
+      <code>render.Setup</code> installs the HTML engine and, because
+      <code>ReloadTemplates</code> is true, registers a WebSocket endpoint at
+      <code>/__pine_reload</code> and starts an <code>fsnotify</code> watcher
+      on the <code>ViewPath</code> directory via <code>websocket.Watch</code>.
+    </li>
+    <li>
+      The engine's <code>Render()</code> automatically injects a tiny
+      <code>&lt;script&gt;</code> tag into every HTML response that connects
+      to that endpoint.
+    </li>
+    <li>
+      When you save a <code>.html</code> file, the watcher fires,
+      <code>engine.Rebuild()</code> re-parses all templates, and a
+      <code>"reload"</code> frame is broadcast to every connected tab.
+    </li>
+    <li>The browser receives the frame and calls <code>location.reload()</code>.</li>
+  </ol>
+</body>
+</html>

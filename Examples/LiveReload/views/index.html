@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 4rem auto; color: #222; line-height: 1.6; }
+    nav { margin-bottom: 2rem; }
+    nav a { margin-right: 1rem; color: #0070f3; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    .hint { margin-top: 2rem; padding: .75rem 1rem; background: #f0fdf4;
+            border: 1px solid #86efac; border-radius: 6px; font-size: .875rem; color: #166534; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+  </nav>
+
+  <h1>{{.Heading}}</h1>
+  <p>{{.Body}}</p>
+
+  <div class="hint">
+    💡 Try changing the text above in <code>views/index.html</code> — the
+    browser will reload automatically when you save.
+  </div>
+</body>
+</html>

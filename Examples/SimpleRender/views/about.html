@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.PageTitle}}</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 3rem auto; color: #222; }
+    nav a { margin-right: 1rem; color: #0070f3; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    .tag { display: inline-block; background: #e8f0fe; color: #1a56db;
+           padding: .2rem .6rem; border-radius: 999px; margin: .2rem; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+  </nav>
+
+  <h1>About {{.Name}}</h1>
+  <p>{{.Bio}}</p>
+
+  <h2>Technologies</h2>
+  <div>
+    {{range .Skills}}
+    <span class="tag">{{.}}</span>
+    {{end}}
+  </div>
+</body>
+</html>

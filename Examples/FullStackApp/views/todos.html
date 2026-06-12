@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  {{template "nav" .}}
+
+  <main class="container">
+    <h1>{{.Title}}</h1>
+
+    <form id="add-form" class="add-form">
+      <input id="new-title" type="text" placeholder="What needs to be done?" required>
+      <button type="submit" class="btn">Add</button>
+    </form>
+
+    <ul id="todo-list" class="todo-list">
+      <!-- populated by app.js -->
+    </ul>
+
+    <p id="empty-msg" class="empty-msg" hidden>No todos yet. Add one above!</p>
+  </main>
+
+  <!-- app.js wires the page to the /api/todos JSON API -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

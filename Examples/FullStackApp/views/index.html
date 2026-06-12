@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  {{template "nav" .}}
+
+  <main class="container">
+    <section class="hero">
+      <h1>Welcome to {{.Title}}</h1>
+      <p>A minimal full-stack example built with Pine — Go's standard-library web framework.</p>
+      <a href="/todos" class="btn">Open Todo List →</a>
+    </section>
+
+    <section class="features">
+      <div class="card">
+        <h3>HTML Rendering</h3>
+        <p>Pages are rendered server-side using Go's <code>html/template</code> engine with shared partials.</p>
+      </div>
+      <div class="card">
+        <h3>JSON API</h3>
+        <p>REST endpoints at <code>/api/todos</code> power the frontend without a full page reload.</p>
+      </div>
+      <div class="card">
+        <h3>Static Assets</h3>
+        <p>CSS and JavaScript are served directly from the <code>static/</code> directory via Pine's wildcard route.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
