@@ -4,31 +4,37 @@
 package websocket
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sync"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 )
 
 var (
-	maxFileSize = 5 * 1024 * 1024 // 5 MB
+	maxFileSize = 5 * 1024 * 1024 // 5 MB initial tail cap
 )
 
-// This is an experimental feature and may change in the future
-// WatchFile is used to watch a file for changes and send the changes to the client
-// This is particularly useful for live streaming of files
+// FolderMessage is the JSON envelope sent by WatchFolder for every file-change
+// event.  The client uses Path to know which file was updated and Content for
+// the new bytes that were appended since the last read.
+type FolderMessage struct {
+	Path    string `json:"path"`    // relative path within the watched directory
+	Content string `json:"content"` // newly appended bytes
+}
+
+// WatchFile streams a single file's changes to conn over WebSocket.
 //
-// If you notice performance issues as you try to stream files
-// please use a different method to stream files
-// WatchFile is not recommended for streaming large files
+// On connection it sends up to maxFileSize bytes from the tail of the file as
+// initial content, then streams every new byte appended afterwards.
 //
-// WatchFile automatically handles file changes but may not be suited for
-// fast changes and may lead to performance issues
-// TODO: Improve performance and add support for fast changes
+// The function blocks until the client disconnects or a fatal write error
+// occurs.  The underlying watcher is always closed before returning.
 func WatchFile(path string, conn *Conn) error {
-	// Check if the file exists and get its info
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -37,130 +43,211 @@ func WatchFile(path string, conn *Conn) error {
 		return fmt.Errorf("error checking file: %v", err)
 	}
 
-	// Create a new file watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %v", err)
 	}
 	defer watcher.Close()
 
-	// Add the file to the watcher
 	if err = watcher.Add(path); err != nil {
 		return fmt.Errorf("error adding file to watcher: %v", err)
 	}
 
-	var fileContent []byte
-	var exceededSize bool
-
-	// Check if the file exceeds the max size
+	// Start at the tail for large files so the initial message is bounded.
+	var offset int64
 	if fileInfo.Size() > int64(maxFileSize) {
-		exceededSize = true
-		fileContent = make([]byte, maxFileSize)
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("error opening file: %v", err)
-		}
-		defer f.Close()
-
-		// Read the last maxFileSize bytes
-		// this may produce buggy behaviour as sometimes not the last bytes are
-		// read but part of the file is read
-		// TODO: Fix this bug
-		_, err = f.ReadAt(fileContent, fileInfo.Size()-int64(maxFileSize))
-		if err != nil {
-			return fmt.Errorf("error reading file: %v", err)
-		}
-	} else {
-		// Read the entire file
-		fileContent, err = os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("error reading file: %v", err)
-		}
+		offset = fileInfo.Size() - int64(maxFileSize)
 	}
 
-	// Send the initial content to the connection
-	// useful to get past data on start connection
-	conn.viewedBytesSize = len(fileContent)
-	if err = conn.Conn.WriteMessage(websocket.TextMessage, fileContent); err != nil {
-		return fmt.Errorf("error writing initial message: %v", err)
+	// Send initial (tail) content.
+	initial, newOffset, err := readFrom(path, offset)
+	if err != nil {
+		return fmt.Errorf("error reading initial content: %v", err)
 	}
+	if len(initial) > 0 {
+		if err = conn.Conn.WriteMessage(websocket.TextMessage, initial); err != nil {
+			return fmt.Errorf("error writing initial message: %v", err)
+		}
+	}
+	offset = newOffset
 
-	// Start a goroutine to listen for file changes
-	// If you use a managed connection with a channel this go routine may block
-	// refrain from writing file changes to channels and write to the connection directly
+	// done is closed when the client disconnects.
+	// Gorilla allows one concurrent reader and one concurrent writer, so the
+	// read-for-close goroutine and the write path below are safe together.
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					var additionalBytes []byte
-
-					if exceededSize {
-						// Known issue: Bug when reading the last bytes of a file
-						// This occurs for very large files
-						// refrain from watching files larger than 5 MB
-						//
-						// a good practice is to rotate your files in the event of watching
-						// large files such as log files that are continously written to
-						f, err := os.Open(path)
-						if err != nil {
-							fmt.Println("Error opening file:", err)
-							continue
-						}
-						defer f.Close()
-						additionalBytes = make([]byte, maxFileSize)
-						_, err = f.ReadAt(additionalBytes, fileInfo.Size()-int64(maxFileSize))
-						if err != nil {
-							fmt.Println("Error reading file:", err)
-							continue
-						}
-					} else {
-						// no issues so far except fast updates to the file might break the os.Open
-						// if this file is written to by another process the OS can completely
-						// block reads until all writes are complete
-						file, err := os.Open(path)
-						if err != nil {
-							fmt.Println("Error opening file:", err)
-							continue
-						}
-						defer file.Close()
-
-						if _, err := file.Seek(int64(conn.viewedBytesSize), 0); err != nil {
-							fmt.Println("Error seeking to position:", err)
-							continue
-						}
-
-						additionalBytes = make([]byte, 1024)
-						n, err := file.Read(additionalBytes)
-						if err != nil && err != io.EOF {
-							fmt.Println("Error reading new content:", err)
-							continue
-						}
-
-						if n > 0 {
-							conn.Conn.WriteMessage(websocket.TextMessage, additionalBytes[:n])
-							conn.viewedBytesSize += n
-						}
-					}
-
-					// Optionally, send the last chunk if the file size exceeded
-					if exceededSize {
-						conn.Conn.WriteMessage(websocket.TextMessage, additionalBytes)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				fmt.Println("Error:", err)
+			if _, _, err := conn.Conn.ReadMessage(); err != nil {
+				return
 			}
 		}
 	}()
 
-	// Prevent the function from returning
-	<-make(chan struct{})
-	return nil
+	for {
+		select {
+		case <-done:
+			return nil
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if event.Has(fsnotify.Write) {
+				newBytes, newOff, err := readFrom(path, offset)
+				if err != nil || len(newBytes) == 0 {
+					continue
+				}
+				if err = conn.Conn.WriteMessage(websocket.TextMessage, newBytes); err != nil {
+					return err
+				}
+				offset = newOff
+			}
+
+		case _, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+			// Watcher errors are non-fatal — keep streaming.
+		}
+	}
+}
+
+// Watch monitors dir recursively for file-system changes and calls onChange
+// with the absolute path of each changed file.  It blocks until done is closed
+// or the underlying watcher fails.
+//
+// New subdirectories created after the watch starts are added automatically.
+// Watch is the shared primitive used by both WatchFolder (streaming) and
+// render.LiveReload (template hot-reload).
+func Watch(dir string, done <-chan struct{}, onChange func(absPath string)) error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("watch: create watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	if err := addDirsRecursive(watcher, dir); err != nil {
+		return fmt.Errorf("watch: add directories: %w", err)
+	}
+
+	for {
+		select {
+		case <-done:
+			return nil
+
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return nil
+			}
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename) {
+				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+					_ = watcher.Add(event.Name)
+					continue
+				}
+				onChange(event.Name)
+			}
+
+		case _, ok := <-watcher.Errors:
+			if !ok {
+				return nil
+			}
+		}
+	}
+}
+
+// WatchFolder watches all files inside a directory (and its subdirectories)
+// for write events and streams newly appended bytes to conn.
+//
+// Each WebSocket message is a JSON-encoded FolderMessage:
+//
+//	{"path": "logs/app.log", "content": "new bytes appended since last read"}
+//
+// New subdirectories created after the watch starts are automatically watched.
+// The function blocks until the client disconnects or a fatal write error
+// occurs.
+func WatchFolder(dir string, conn *Conn) error {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("watchfolder: %q is not a directory", dir)
+	}
+
+	// done is closed when the client disconnects.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := conn.Conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Per-file read offsets tracked under a mutex.
+	var (
+		offMu   sync.Mutex
+		offsets = make(map[string]int64)
+	)
+
+	return Watch(dir, done, func(absPath string) {
+		fi, err := os.Stat(absPath)
+		if err != nil || fi.IsDir() {
+			return
+		}
+
+		offMu.Lock()
+		off := offsets[absPath]
+		offMu.Unlock()
+
+		newBytes, newOff, err := readFrom(absPath, off)
+		if err != nil || len(newBytes) == 0 {
+			return
+		}
+
+		offMu.Lock()
+		offsets[absPath] = newOff
+		offMu.Unlock()
+
+		relPath, _ := filepath.Rel(dir, absPath)
+		relPath = filepath.ToSlash(relPath)
+
+		msg := FolderMessage{Path: relPath, Content: string(newBytes)}
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return
+		}
+		_ = conn.Conn.WriteMessage(websocket.TextMessage, data)
+	})
+}
+
+// addDirsRecursive walks root and adds every directory to watcher.
+func addDirsRecursive(watcher *fsnotify.Watcher, root string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+		return watcher.Add(path)
+	})
+}
+
+// readFrom opens path, seeks to offset, reads all available bytes, and closes
+// the file before returning — safe to call in a tight loop without leaking fds.
+// Returns (data, newOffset, error).
+func readFrom(path string, offset int64) ([]byte, int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, offset, err
+	}
+	defer f.Close()
+
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return nil, offset, err
+	}
+
+	buf := make([]byte, 32*1024)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return nil, offset, err
+	}
+	return buf[:n], offset + int64(n), nil
 }
