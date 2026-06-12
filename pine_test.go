@@ -124,163 +124,136 @@ func TestNewServer_TLSConfig(t *testing.T) {
 
 func TestAddRoute_ValidMethod(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
+	server.AddRoute("GET", "/test", func(c *Ctx) error {
+		return c.SendString("ok")
+	})
 
-	// Add a valid GET route
-	server.AddRoute("GET", "/test", handler)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
 
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("GET")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for GET")
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
 	}
-
-	// Verify the route details
-	route := server.stack[methodIndex][0]
+	if len(server.routes) == 0 {
+		t.Error("expected at least one route to be stored")
+	}
+	route := server.routes[0]
 	if route.Path != "/test" {
-		t.Errorf("expected route path to be '/test', got '%s'", route.Path)
+		t.Errorf("expected route path '/test', got '%s'", route.Path)
 	}
 	if route.Method != "GET" {
-		t.Errorf("expected route method to be 'GET', got '%s'", route.Method)
+		t.Errorf("expected route method 'GET', got '%s'", route.Method)
 	}
-	if len(route.Handlers) == 0 {
-		t.Error("expected at least one handler to be added")
-	}
-}
-
-func TestAddRoute_InvalidMethod(t *testing.T) {
-	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Attempt to add a route with an invalid method
-	server.AddRoute("INVALID", "/test", handler)
-
-	// read the error console to check if the error log was called
-	// Since logging is not easily captured, you could check the log output manually or use a mock logger in real tests
-
-	// TODO: Find a way to capture the error log in tests
 }
 
 func TestGet(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add a GET route
-	server.Get("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("GET")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for GET")
+	server.Get("/test", func(c *Ctx) error { return c.SendString("GET") })
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("GET: expected 200, got %d", rr.Code)
 	}
 }
 
 func TestPost(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add a POST route
-	server.Post("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("POST")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for POST")
+	server.Post("/test", func(c *Ctx) error { return c.SendString("POST") })
+	req := httptest.NewRequest("POST", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("POST: expected 200, got %d", rr.Code)
 	}
 }
 
 func TestPut(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add a PUT route
-	server.Put("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("PUT")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for PUT")
+	server.Put("/test", func(c *Ctx) error { return c.SendString("PUT") })
+	req := httptest.NewRequest("PUT", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("PUT: expected 200, got %d", rr.Code)
 	}
 }
 
 func TestPatch(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add a PATCH route
-	server.Patch("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("PATCH")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for PATCH")
+	server.Patch("/test", func(c *Ctx) error { return c.SendString("PATCH") })
+	req := httptest.NewRequest("PATCH", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("PATCH: expected 200, got %d", rr.Code)
 	}
 }
 
 func TestDelete(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add a DELETE route
-	server.Delete("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("DELETE")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for DELETE")
+	server.Delete("/test", func(c *Ctx) error { return c.SendString("DELETE") })
+	req := httptest.NewRequest("DELETE", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("DELETE: expected 200, got %d", rr.Code)
 	}
 }
 
 func TestOptions(t *testing.T) {
 	server := New()
-	handler := func(c *Ctx) error { return nil }
-
-	// Add an OPTIONS route
-	server.Options("/test", handler)
-
-	// Verify that the route was added correctly
-	methodIndex := server.methodInt("OPTIONS")
-	if len(server.stack[methodIndex]) == 0 {
-		t.Error("expected at least one route to be added for OPTIONS")
+	server.Options("/test", func(c *Ctx) error { return c.SendStatus(http.StatusNoContent) })
+	req := httptest.NewRequest("OPTIONS", "/test", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Errorf("OPTIONS: expected 204, got %d", rr.Code)
 	}
 }
 
-func TestMatchRoute_ExactMatch(t *testing.T) {
-	routePath := "/user/123"
-	requestPath := "/user/123"
+func TestRouter_ExactMatch(t *testing.T) {
+	server := New()
+	server.Get("/user/123", func(c *Ctx) error { return c.SendString("ok") })
 
-	matched, params := matchRoute(routePath, requestPath)
+	req := httptest.NewRequest("GET", "/user/123", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
 
-	if !matched {
-		t.Error("expected match to be true for exact path")
-	}
-	if len(params) != 0 {
-		t.Error("expected params to be empty for exact match")
-	}
-}
-
-func TestMatchRoute_WithParams(t *testing.T) {
-	routePath := "/user/:id"
-	requestPath := "/user/123"
-
-	matched, params := matchRoute(routePath, requestPath)
-
-	if !matched {
-		t.Error("expected match to be true for parameterized path")
-	}
-	if params["id"] != "123" {
-		t.Errorf("expected param 'id' to be '123', got '%s'", params["id"])
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
 	}
 }
 
-func TestMatchRoute_NoMatch(t *testing.T) {
-	routePath := "/user/:id"
-	requestPath := "/profile/123"
+func TestRouter_WithParams(t *testing.T) {
+	server := New()
+	server.Get("/user/:id", func(c *Ctx) error {
+		return c.SendString(c.Params("id"))
+	})
 
-	matched, _ := matchRoute(routePath, requestPath)
+	req := httptest.NewRequest("GET", "/user/123", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
 
-	if matched {
-		t.Error("expected match to be false for non-matching path")
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	if rr.Body.String() != "123" {
+		t.Errorf("expected param id='123', got '%s'", rr.Body.String())
+	}
+}
+
+func TestRouter_NoMatch(t *testing.T) {
+	server := New()
+	server.Get("/user/:id", func(c *Ctx) error { return c.SendString("ok") })
+
+	req := httptest.NewRequest("GET", "/profile/123", nil)
+	rr := httptest.NewRecorder()
+	server.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rr.Code)
 	}
 }
 
@@ -546,6 +519,100 @@ func TestReadCookie(t *testing.T) {
 	if cookie.Value != expected {
 		t.Errorf("expected '%s', got '%s'", expected, cookie.Value)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// SetCookie / DeleteCookie / SameSite tests (fixes 5 & 6)
+// ---------------------------------------------------------------------------
+
+func TestSetCookie_MultipleCookies_SeparateHeaders(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+
+	ctx.SetCookie(
+		Cookie{Name: "session", Value: "abc"},
+		Cookie{Name: "csrf", Value: "xyz"},
+	)
+
+	resp := rr.Result()
+	cookies := resp.Cookies()
+	if len(cookies) != 2 {
+		t.Fatalf("expected 2 Set-Cookie headers, got %d", len(cookies))
+	}
+	names := map[string]string{}
+	for _, c := range cookies {
+		names[c.Name] = c.Value
+	}
+	if names["session"] != "abc" {
+		t.Errorf("session cookie: expected 'abc', got %q", names["session"])
+	}
+	if names["csrf"] != "xyz" {
+		t.Errorf("csrf cookie: expected 'xyz', got %q", names["csrf"])
+	}
+}
+
+func TestDeleteCookie_SetsMaxAgeNegativeOne(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+
+	ctx.DeleteCookie("session")
+
+	raw := rr.Header().Get("Set-Cookie")
+	if raw == "" {
+		t.Fatal("expected Set-Cookie header to be set")
+	}
+	if !containsString(raw, "Max-Age=-1") {
+		t.Errorf("expected Max-Age=-1 in Set-Cookie, got: %s", raw)
+	}
+}
+
+func TestSetCookie_SameSiteLax(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+
+	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteLax})
+
+	raw := rr.Header().Get("Set-Cookie")
+	if !containsString(raw, "SameSite=Lax") {
+		t.Errorf("expected SameSite=Lax in Set-Cookie, got: %s", raw)
+	}
+}
+
+func TestSetCookie_SameSiteStrict(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+
+	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteStrict})
+
+	raw := rr.Header().Get("Set-Cookie")
+	if !containsString(raw, "SameSite=Strict") {
+		t.Errorf("expected SameSite=Strict in Set-Cookie, got: %s", raw)
+	}
+}
+
+func TestSetCookie_SameSiteUnset_OmitsDirective(t *testing.T) {
+	rr := httptest.NewRecorder()
+	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+
+	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteUnset})
+
+	raw := rr.Header().Get("Set-Cookie")
+	if containsString(raw, "SameSite") {
+		t.Errorf("expected no SameSite directive when SameSiteUnset, got: %s", raw)
+	}
+}
+
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstr(s, substr))
+}
+
+func containsSubstr(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
 
 // TODO: Add tests involving responseWriterWrapper. As of now, such tests cannot
