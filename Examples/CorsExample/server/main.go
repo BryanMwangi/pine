@@ -10,7 +10,7 @@ import (
 func main() {
 	app := pine.New()
 	app.Use(cors.New(cors.Config{
-		AllowedOrigins:   []string{"http://localhost:5174"},
+		AllowedOrigins:   []string{"http://localhost:5173"},
 		AllowCredentials: true,
 	}))
 
