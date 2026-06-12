@@ -149,8 +149,8 @@ func New(config ...Config) pine.Middleware {
 
 	return func(next pine.Handler) pine.Handler {
 		return func(c *pine.Ctx) error {
-			// process the rate limit checker
-			e, err := cfg.process(c)
+			// process the rate limit checker; rem is a snapshot captured under e.mu.
+			e, rem, err := cfg.process(c)
 
 			if cfg.ShowHeader {
 				var maxrequest, remaining int
@@ -158,7 +158,7 @@ func New(config ...Config) pine.Middleware {
 
 				if e != nil {
 					maxrequest = cfg.MaxRequests
-					remaining = e.remaining
+					remaining = rem
 					reset = e.reset.Format(http.TimeFormat)
 				} else {
 					maxrequest = 0
@@ -181,7 +181,7 @@ func New(config ...Config) pine.Middleware {
 			}
 
 			// IP is rate limited. Rate limit is exceeded
-			if e.remaining == 0 {
+			if rem < 0 {
 				return cfg.Handler(c)
 			}
 			return next(c)
@@ -189,55 +189,49 @@ func New(config ...Config) pine.Middleware {
 	}
 }
 
-func (cfg *Config) process(c *pine.Ctx) (*entry, error) {
-	// generate the key. You can use the IP address of the client
-	// or you can use the user id of the user
+// process returns the entry, a remaining snapshot captured under e.mu, and any error.
+// Callers must use the returned snapshot — never read e.remaining directly.
+func (cfg *Config) process(c *pine.Ctx) (*entry, int, error) {
 	key := cfg.KeyGen(c)
 
 	if cfg.Whitelist != nil {
 		if _, whitelist := cfg.internalWhitelist[key]; whitelist {
-			return nil, nil
+			return nil, 0, nil
 		}
 	}
 
 	if cfg.Blacklist != nil {
 		if _, blacklisted := cfg.internalBlacklist[key]; blacklisted {
-			return nil, ErrBlacklist
+			return nil, 0, ErrBlacklist
 		}
 	}
 
-	// store is memory safe and thread safe
-	ent := cfg.store.Get(key)
-
-	// if the entry is not found in the cache, we create a new entry
-	if ent == nil {
-		e := &entry{
+	// GetOrSet is atomic — no TOCTOU window between check and creation.
+	raw := cfg.store.GetOrSet(key, func() (interface{}, time.Duration) {
+		return &entry{
 			key:       key,
 			count:     1,
 			reset:     time.Now().Add(cfg.Window),
 			remaining: cfg.MaxRequests,
-		}
-		cfg.store.Set(key, e, cfg.Window)
-		return e, nil
-	}
-	// we convert the entry to the rate limit entry
-	e := ent.(*entry)
+		}, cfg.Window
+	})
+
+	e := raw.(*entry)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// rate limit is exceeded
-	if e.remaining == 0 {
-		return e, nil
+	// Already exhausted — don't decrement further.
+	if e.remaining < 0 {
+		return e, e.remaining, nil
 	}
-	// reduce the remaining requests
-	e.remaining--
+	e.remaining-- // goes to -1 on the (MaxRequests+1)-th request
+	rem := e.remaining
 
 	resetTime := e.reset.UnixMilli() - time.Now().UnixMilli()
 	if resetTime < 0 {
 		resetTime = 0
 	}
-	// update the cache with the new rate limit entry
 	cfg.store.Set(key, e, time.Duration(resetTime)*time.Millisecond)
-	return e, nil
+	return e, rem, nil
 }
