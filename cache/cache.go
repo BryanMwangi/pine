@@ -56,7 +56,7 @@ func (c *Cache) Set(key string, data interface{}, ttl ...time.Duration) {
 	}
 	c.data[key] = keyVal{
 		data: data,
-		exp:  time.Now().Add(ttl[0]).Unix(),
+		exp:  time.Now().Add(ttl[0]).UnixMilli(),
 	}
 
 	if !c.running {
@@ -70,25 +70,45 @@ func (c *Cache) Get(key string) interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	val, ok := c.data[key]
-	if !ok || val.exp < time.Now().Unix() {
+	if !ok || val.exp < time.Now().UnixMilli() {
 		return nil
 	}
 	return val.data
 }
 
-// checks if the data exists in the cache using the key
-//
-// If you call this method and immediately afterwards call the Get method within
-// the window of time that the data in the cache is set to expire, sometimes exists will return
-// true but Get will return nil
-//
-// To avoid this, you can call the Get method directly and check if the value returned is
-// nil or not
+// Exists reports whether a non-expired entry for key is present in the cache.
+// It performs the same expiry check as Get, so the two are always consistent.
 func (c *Cache) Exists(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	_, ok := c.data[key]
-	return ok
+	val, ok := c.data[key]
+	return ok && val.exp >= time.Now().UnixMilli()
+}
+
+// GetOrSet atomically gets an existing unexpired entry or creates a new one.
+// fn is called only when the key is absent or expired; its return value and
+// TTL are stored under a single write lock — no TOCTOU window.
+// If fn returns a zero TTL the cache's default reset interval is used.
+func (c *Cache) GetOrSet(key string, fn func() (interface{}, time.Duration)) interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now().UnixMilli()
+	if val, ok := c.data[key]; ok && val.exp > now {
+		return val.data
+	}
+
+	data, ttl := fn()
+	if ttl == 0 {
+		ttl = c.c
+	}
+	c.data[key] = keyVal{data: data, exp: time.Now().Add(ttl).UnixMilli()}
+
+	if !c.running {
+		c.running = true
+		c.cond.Signal()
+	}
+	return data
 }
 
 // deletes the data from the cache using the key
@@ -122,7 +142,7 @@ func (c *Cache) start() {
 
 		c.mu.Lock()
 		// current time of checking the cache
-		now := time.Now().Unix()
+		now := time.Now().UnixMilli()
 		for k, v := range c.data {
 			// remove expired data
 			if v.exp < now {
