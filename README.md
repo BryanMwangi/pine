@@ -153,9 +153,9 @@ We aim to bring Pine to the same level as other popular frameworks. Some of the 
 
 - Session support and pooling
 - More middlewares out of the box such as CSRF etc.
-- Improvements to routing
+- ~~Improvements to routing~~
 - Improvements to networking to improve performance from a low level approach
-- Add HTML rendering support
+- ~~Add HTML rendering support~~
 - Add support for HTTP/3
 
 <!-- CONTRIBUTING -->

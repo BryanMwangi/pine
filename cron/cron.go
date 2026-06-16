@@ -126,11 +126,11 @@ func (c *Cron) handleJobError(job Job) {
 		return
 	}
 
-	//we increment the retry count for the job
+	// we increment the retry count for the job
 	c.retryCount[job.id]++
 
-	//we check if the job has been retried the maximum number of times
-	//if it has we delete it
+	// we check if the job has been retried the maximum number of times
+	// if it has we delete it
 	if c.config.RestartOnError && c.config.RetryAttempts > 0 && c.retryCount[job.id] >= c.config.RetryAttempts {
 		logger.RuntimeError("Max retry attempts reached, deleting job")
 		c.removeJob(job.id)
@@ -142,15 +142,9 @@ func (c *Cron) handleJobError(job Job) {
 
 func (c *Cron) startJob(job Job) {
 	for {
-		// Execute the task function
-		err := job.Fn()
+		err := safeRun(job.Fn)
 		if err != nil {
-			// Log the error
-			logger.RuntimeError("Error in cron job")
-			logger.RuntimeError(getFunctionName(job.Fn))
-			logger.RuntimeError(err.Error())
-
-			// Remove the task if it fails
+			logger.RuntimeError(formatError(job.Fn, err))
 			c.handleJobError(job)
 			// If the job has been removed, exit the loop
 			if !c.jobExists(job.id) {
@@ -179,8 +173,8 @@ func (c *Cron) jobExists(id uuid.UUID) bool {
 
 // Call this method to start the cron
 //
-// By default cron jobs are executed in their own goroutines hence in separate threads
-// This method starts the cron jobs in a new thread away from the server's main thread
+// By default cron jobs are executed in their own goroutines.
+// This method starts the cron jobs in a new goroutine away from the server's main goroutine.
 //
 // This ensures non blocking execution of cron jobs hence the server
 // can handle requests as cron jobs are executed with minimal impact on the server

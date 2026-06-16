@@ -117,7 +117,6 @@ func Success(message ...any) {
 
 func RuntimeError(message ...any) {
 	fmt.Println(Red + fmt.Sprint(message...) + Reset)
-	log.Println("RUNTIME ERROR: " + fmt.Sprint(message...))
 }
 
 func RuntimeInfo(message ...any) {
