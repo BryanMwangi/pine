@@ -22,7 +22,22 @@ func main() {
 		Time: 1 * time.Second,
 	}
 	task3 := cron.Job{
+		Fn:   panicError,
+		Time: 3 * time.Second,
+	}
+
+	task4 := cron.Job{
 		Fn:   logHello2,
+		Time: 3 * time.Second,
+	}
+
+	task5 := cron.Job{
+		Fn:   nestedPanicError,
+		Time: 3 * time.Second,
+	}
+
+	task6 := cron.Job{
+		Fn:   cronError,
 		Time: 3 * time.Second,
 	}
 
@@ -31,7 +46,7 @@ func main() {
 		RetryAttempts:  3,
 	})
 
-	newCron.AddJobs(task, task2, task3)
+	newCron.AddJobs(task, task2, task3, task4, task5, task6)
 	newCron.Start()
 
 	// Define a route for the GET method on the root path '/hello'
@@ -52,7 +67,19 @@ func logError() error {
 	return fmt.Errorf("Error")
 }
 
+func panicError() error {
+	panic("Panic Error — this will be caught by the cron runner")
+}
+
+func nestedPanicError() error {
+	return panicError()
+}
+
 func logHello2() error {
 	fmt.Println("Another Hello World!")
 	return nil
+}
+
+func cronError() error {
+	return cron.Err(fmt.Errorf("Tracing via cron.Err()"))
 }
