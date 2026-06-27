@@ -322,6 +322,17 @@ func (server *Server) Options(path string, handlers ...Handler) {
 	server.AddRoute(MethodOptions, path, handlers...)
 }
 
+// Group returns a route group rooted at prefix.
+// Middleware passed here applies to every route registered on the group or
+// its sub-groups, but not to routes registered directly on the server.
+func (server *Server) Group(prefix string, middlewares ...Middleware) *Group {
+	return &Group{
+		server:      server,
+		prefix:      prefix,
+		middlewares: middlewares,
+	}
+}
+
 // Start listens on address and serves requests.
 func (server *Server) Start(address string) error {
 	httpServer := &http.Server{
