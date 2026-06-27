@@ -1,14 +1,37 @@
 # Changelog
 
-All changes on the `experimental` branch relative to `main`.
+---
+
+## [v1.1.6] — Minor Release
+
+### 8. Route grouping — `Group`
+
+**Files:** `group.go` (new), `group_test.go` (new), `pine.go`, `Examples/GroupExample/` (new)
+
+**What changed**
+
+- `Server.Group(prefix, ...middleware) *Group` added — returns a route group that prefixes every registered route with `prefix`.
+- `Group.Group(prefix, ...middleware) *Group` — nests groups; sub-groups inherit the parent prefix and middleware and can add their own.
+- `Group` exposes the same HTTP method shorthands as `Server`: `Get`, `Post`, `Put`, `Patch`, `Delete`, `Options`, and `AddRoute`.
+- Group middleware is scoped strictly to the group and its sub-groups — routes registered directly on the server are unaffected.
+- Global middleware added via `server.Use()` (before or after group route registration) correctly wraps all routes without double-applying group middleware.
+- Execution order is always: **global → group → handler**.
+- `joinPath` helper normalises prefix/path concatenation — handles trailing slashes, missing leading slashes, and empty paths without producing double slashes.
+
+**Tests added** (`group_test.go`)
+- Prefixed routes resolve correctly; unprefixed paths 404.
+- Nested groups concatenate prefixes and extract params.
+- Group middleware runs on group routes and does not run outside.
+- Global middleware runs before group middleware.
+- `server.Use()` called after group registration still wraps group routes.
+- Trailing-slash prefix normalisation.
+- Empty path registers at the group root.
+- Two sibling groups do not interfere.
+- `joinPath` unit tests covering all slash edge cases.
 
 ---
 
-## [Unreleased] — experimental branch
-
-### Commits (in review order)
-
----
+## [v1.1.5] — Major Release
 
 ### 1. Radix-tree router
 
@@ -23,7 +46,7 @@ All changes on the `experimental` branch relative to `main`.
 
 **What changed**
 
-- Replaced the linear `stack [][]*Route` with a radix-tree `Router`.  Lookup is now O(path-length) instead of O(routes).
+- Replaced the linear `stack [][]*Route` with a radix-tree `Router`. Lookup is now O(path-length) instead of O(routes).
 - Static segments, `:param` captures, and `/*` wildcard are all supported with correct priority order (static > param > wildcard).
 - Method isolation: `GET /x` and `POST /x` live at the same node under different method keys, so wrong-method requests get a clean 404 instead of accidentally matching.
 - `matchRoute`, `splitPath`, and `methodInt` removed from `pine.go`.
@@ -54,7 +77,7 @@ All changes on the `experimental` branch relative to `main`.
 **What changed**
 
 - `file.go`: `fileName = filepath.Base(filepath.Clean(fileName))` strips all directory components before the path is joined.
-- `websocket/websocket.go`: `CheckOrigin` removed from `defaultConfig` (left `nil`).  In `New()`, the field on the Gorilla upgrader is only set when the caller explicitly provides one — otherwise Gorilla's built-in safe default applies (Origin header must match Host header).
+- `websocket/websocket.go`: `CheckOrigin` removed from `defaultConfig` (left `nil`). In `New()`, the field on the Gorilla upgrader is only set when the caller explicitly provides one — otherwise Gorilla's built-in safe default applies (Origin header must match Host header).
 
 **Tests added** (`file_test.go`, `websocket/websocket_test.go`)
 - Upload with `Filename = "../../evil.txt"` — asserts file lands at `<uploadDir>/evil.txt`.
@@ -72,7 +95,7 @@ All changes on the `experimental` branch relative to `main`.
 | # | Symptom |
 |---|---------|
 | 7 | `process()` in the rate limiter called `cache.Get()` then `cache.Set()` as two separate lock acquisitions; two concurrent first-requests both saw nil and created independent entries — the second overwrote the first. |
-| 9 | `Exists` checked map membership only; `Get` checked expiry.  Between sweeper runs, `Exists` returned `true` for keys that `Get` would return `nil` for. |
+| 9 | `Exists` checked map membership only; `Get` checked expiry. Between sweeper runs, `Exists` returned `true` for keys that `Get` would return `nil` for. |
 
 **What changed**
 
@@ -103,7 +126,7 @@ All changes on the `experimental` branch relative to `main`.
 **What changed**
 
 - `process()` now calls `cfg.store.GetOrSet(...)` instead of `Get` + `Set`.
-- `process()` signature changed from `(*entry, error)` to `(*entry, int, error)` — the `int` is `e.remaining` captured under `e.mu` before the lock is released.  Callers use this snapshot for both the response header and the block decision; `e.remaining` is never read outside the lock.
+- `process()` signature changed from `(*entry, error)` to `(*entry, int, error)` — the `int` is `e.remaining` captured under `e.mu` before the lock is released. Callers use this snapshot for both the response header and the block decision; `e.remaining` is never read outside the lock.
 - Block condition changed from `e.remaining == 0` to `rem < 0`; the counter now starts at `MaxRequests` and decrements to `-1` on the first over-limit request, so exactly `MaxRequests` requests succeed.
 
 **Tests added** (`limiter/rate_limit_test.go`)
@@ -122,7 +145,7 @@ All changes on the `experimental` branch relative to `main`.
 
 | # | Symptom |
 |---|---------|
-| 10 | `openNew()` called `os.OpenFile` to create the file but discarded the handle and never assigned `l.file`.  Every subsequent `Write` therefore called `openExistingOrNew` → `openNew` again, leaking one fd per write.  `openExistingOrNew` also opened the file twice (once to create, once to get a handle). |
+| 10 | `openNew()` called `os.OpenFile` to create the file but discarded the handle and never assigned `l.file`. Every subsequent `Write` therefore called `openExistingOrNew` → `openNew` again, leaking one fd per write. `openExistingOrNew` also opened the file twice (once to create, once to get a handle). |
 
 **What changed**
 
@@ -145,18 +168,18 @@ All changes on the `experimental` branch relative to `main`.
 
 **`websocket/file.go`**
 
-- Added exported `Watch(dir string, done <-chan struct{}, onChange func(absPath string)) error` — a shared directory-watching primitive backed by `fsnotify`.  New subdirectories are added automatically.  `WatchFolder` is refactored to use `Watch` internally, eliminating a duplicated event loop.  `WatchFile` and `WatchFolder` remain pure streaming tools; `Watch` is the reusable core.
+- Added exported `Watch(dir string, done <-chan struct{}, onChange func(absPath string)) error` — a shared directory-watching primitive backed by `fsnotify`. New subdirectories are added automatically. `WatchFolder` is refactored to use `Watch` internally, eliminating a duplicated event loop. `WatchFile` and `WatchFolder` remain pure streaming tools; `Watch` is the reusable core.
 
 **`render` package (new)**
 
 - `Engine` struct implements `pine.ViewEngine` (for rendering) and `pine.Reloader` (for hot-reload).
 - Templates are named by their path relative to `ViewPath` with forward-slash separators, e.g. `"admin/dashboard.html"`, avoiding subdirectory name collisions.
-- `Engine.Render()` buffers output before writing so a template error never sends a partial response.  When live reload is active, a small inline `<script>` is appended automatically — no template changes needed.
+- `Engine.Render()` buffers output before writing so a template error never sends a partial response. When live reload is active, a small inline `<script>` is appended automatically — no template changes needed.
 - `Engine.Rebuild()` atomically swaps the template set under `sync.RWMutex`; in-flight renders are not affected.
 - `render.Setup(server)` is the single entry point:
   - Calls `render.New(server.ViewPath())` and installs the engine via `server.SetEngine(e)`.
   - If `server.ReloadTemplates()` is true, also calls `render.LiveReload(server, e)` — no separate call needed.
-- `render.LiveReload` registers a WebSocket endpoint at `/__pine_reload`, starts `websocket.Watch` in a goroutine to monitor `ViewPath`, and registers a shutdown hook via `server.AddShutdownHook`.  On each template file change (`.html`, `.gohtml`, `.tmpl`) a 50 ms debounce fires: templates are rebuilt, then "reload" is broadcast to all connected browser tabs.
+- `render.LiveReload` registers a WebSocket endpoint at `/__pine_reload`, starts `websocket.Watch` in a goroutine to monitor `ViewPath`, and registers a shutdown hook via `server.AddShutdownHook`. On each template file change (`.html`, `.gohtml`, `.tmpl`) a 50 ms debounce fires: templates are rebuilt, then "reload" is broadcast to all connected browser tabs.
 
 **`pine.go`**
 
@@ -181,19 +204,25 @@ All changes on the `experimental` branch relative to `main`.
 
 **SimpleRender**
 
-Minimal example: a two-page profile site using `render.Setup(app)`.  Demonstrates named subdirectory templates and passing structured data to templates.
+Minimal example: a two-page profile site using `render.Setup(app)`. Demonstrates named subdirectory templates and passing structured data to templates.
 
 **FullStackApp**
 
-Full-stack todo application: HTML pages rendered server-side, a REST JSON API (`GET/POST /api/todos`, `PATCH /api/todos/:id`), and static file serving (`/static/*`).  Shows Pine as a complete server without a separate API gateway.
+Full-stack todo application: HTML pages rendered server-side, a REST JSON API (`GET/POST /api/todos`, `PATCH /api/todos/:id`), and static file serving (`/static/*`). Shows Pine as a complete server without a separate API gateway.
 
 **LiveReload**
 
-Development-mode hot-reload example.  Set `ReloadTemplates: true` and call `render.Setup(app)` — the browser reloads automatically whenever a template under `views/` is saved.  Demonstrates the end-to-end flow: file change → `fsnotify` event → `websocket.Watch` callback → template rebuild → browser reload.
+Development-mode hot-reload example. Set `ReloadTemplates: true` and call `render.Setup(app)` — the browser reloads automatically whenever a template under `views/` is saved. Demonstrates the end-to-end flow: file change → `fsnotify` event → `websocket.Watch` callback → template rebuild → browser reload.
 
 ---
 
 ## Upgrade notes
+
+### v1.1.5 → v1.1.6
+
+No breaking changes. Route grouping is purely additive.
+
+### pre-v1.1.5 → v1.1.5
 
 | Old API | New API |
 |---------|---------|
