@@ -91,26 +91,23 @@ func bind(input string, destination interface{}) error {
 	return nil
 }
 
-// Called to the bind of the JSON body
-// A future revision of this will be implemented to handle forms and XML bodies
-// but the logic will pretty much be the same
+// bindData validates destination after JSON decoding.
+// Only fields tagged `pine:"required"` are checked — all other fields are optional.
 func bindData(destination interface{}) error {
 	v := reflect.ValueOf(destination)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	// we can check if the value is a struct or a slice
 	if v.Kind() == reflect.Struct {
+		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
-			field := v.Field(i)
-			if isZeroValue(field) {
+			if t.Field(i).Tag.Get("pine") == "required" && isZeroValue(v.Field(i)) {
 				return ErrValidation
 			}
 		}
 	}
 	if v.Kind() == reflect.Slice {
-		length := v.Len()
-		for i := 0; i < length; i++ {
+		for i := 0; i < v.Len(); i++ {
 			if isZeroValue(v.Index(i)) {
 				return ErrValidation
 			}
@@ -133,10 +130,6 @@ func isZeroValue(val reflect.Value) bool {
 	case reflect.Bool:
 		return !val.Bool()
 	case reflect.Slice, reflect.Array:
-		// For slices and arrays, check each element
-		if val.Len() == 0 {
-			return true
-		}
 		for i := 0; i < val.Len(); i++ {
 			if isZeroValue(val.Index(i)) {
 				return true

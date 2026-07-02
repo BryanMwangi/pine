@@ -2,6 +2,41 @@
 
 ---
 
+## [v1.1.7] — Minor Release
+
+### 9. `BindJSON` — opt-in required validation & empty slice support
+
+**Files:** `bind.go`, `bind_test.go`
+
+**Problems fixed**
+
+- `BindJSON` previously treated every struct field as required — any zero value (empty string, `0`, `false`, `nil`, empty slice) returned `ErrValidation`. This made optional fields impossible without workarounds.
+- Empty slice fields (e.g. `[]string{}`) always failed validation even when the field is intentionally optional.
+
+**What changed**
+
+- `bindData` now only validates fields tagged `pine:"required"`. All other fields are accepted regardless of their value.
+- Empty slices and nil slices are no longer treated as zero values — an empty `[]string{}` is valid without any tag.
+- `isZeroValue` updated: the `len == 0` early return for `reflect.Slice` / `reflect.Array` removed; only non-empty slices with a zero-value element are flagged.
+
+**Usage**
+
+```go
+type Body struct {
+    Name  string   `json:"name"  pine:"required"` // must be non-empty
+    Email string   `json:"email" pine:"required"` // must be non-empty
+    Tags  []string `json:"tags"`                  // optional — empty slice is fine
+    Age   int      `json:"age"`                   // optional — zero is fine
+}
+```
+
+**Tests added** (`bind_test.go`)
+- Required field absent → `ErrValidation`.
+- Required field present with optional empty slice → no error.
+- Optional field with zero value → no error.
+
+---
+
 ## [v1.1.6] — Minor Release
 
 ### 8. Route grouping — `Group`
@@ -217,6 +252,22 @@ Development-mode hot-reload example. Set `ReloadTemplates: true` and call `rende
 ---
 
 ## Upgrade notes
+
+### v1.1.6 → v1.1.7
+
+**Breaking change:** `BindJSON` no longer validates every field as required by default. If you relied on the old behaviour, add `pine:"required"` to each field that must be non-zero.
+
+```go
+// Before — all fields implicitly required
+type Body struct {
+    Name string `json:"name"`
+}
+
+// After — opt in explicitly
+type Body struct {
+    Name string `json:"name" pine:"required"`
+}
+```
 
 ### v1.1.5 → v1.1.6
 

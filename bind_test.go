@@ -89,3 +89,50 @@ func TestBindQuery_NotFound(t *testing.T) {
 		t.Fatalf("expected ErrValidation, got %v", err)
 	}
 }
+
+func TestBindJSON_RequiredTag_MissingField_ReturnsError(t *testing.T) {
+	// fieldOne is required but absent from the body — must error.
+	body := `{"fieldTwo": []}`
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
+	ctx := &Ctx{Request: req}
+
+	var data struct {
+		FieldOne string   `json:"fieldOne" pine:"required"`
+		FieldTwo []string `json:"fieldTwo"`
+	}
+
+	if err := ctx.BindJSON(&data); !errors.Is(err, ErrValidation) {
+		t.Fatalf("expected ErrValidation for missing required field, got %v", err)
+	}
+}
+
+func TestBindJSON_RequiredTag_PresentField_NoError(t *testing.T) {
+	body := `{"fieldOne": "hello", "fieldTwo": []}`
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
+	ctx := &Ctx{Request: req}
+
+	var data struct {
+		FieldOne string   `json:"fieldOne" pine:"required"`
+		FieldTwo []string `json:"fieldTwo"`
+	}
+
+	if err := ctx.BindJSON(&data); err != nil {
+		t.Fatalf("required field present and empty slice optional — expected no error, got %v", err)
+	}
+}
+
+func TestBindJSON_OptionalField_ZeroValue_NoError(t *testing.T) {
+	// Fields without pine:"required" are always optional, even when zero.
+	body := `{"fieldOne": "hello"}`
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
+	ctx := &Ctx{Request: req}
+
+	var data struct {
+		FieldOne string `json:"fieldOne" pine:"required"`
+		FieldTwo int    `json:"fieldTwo"` // optional — zero value is fine
+	}
+
+	if err := ctx.BindJSON(&data); err != nil {
+		t.Fatalf("optional zero-value field should be accepted, got %v", err)
+	}
+}
