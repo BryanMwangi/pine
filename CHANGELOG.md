@@ -2,6 +2,20 @@
 
 ---
 
+## [v1.1.8] — Minor Release
+
+### 10. Middleware post-response inspection
+
+**What changed**
+
+- Middleware can now read and modify the response **after** calling `next(c)` — before anything is written to the client. Use `c.Response.StatusCode()`, `c.Response.ContentType()`, `c.Response.Body()`, and `c.Response.SetBody(v)` to build loggers, response wrappers, ETag generators, and similar cross-cutting concerns.
+- Global middleware now fires on unmatched routes (404 / 405) as well, so request loggers produce a complete access log with no extra wiring.
+- `SendStatus` no longer sends a body for `204`, `304`, and `1xx` responses — those codes prohibit one per RFC 9110.
+- `Response.Unwrap()` added — returns the raw `http.ResponseWriter` for protocol upgrades (WebSocket, SSE) and marks the response as streaming so the buffer is skipped.
+- `Examples/MiddlewareExample/` added — demonstrates a logger that captures method, path, status, content type, and body on every request.
+
+---
+
 ## [v1.1.7] — Minor Release
 
 ### 9. `BindJSON` — opt-in required validation & empty slice support

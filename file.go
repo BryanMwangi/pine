@@ -90,7 +90,7 @@ func (c *Ctx) MultipartFormValue(key string) string {
 }
 
 func (c *Ctx) SendFile(filePath string) error {
-	http.ServeFile(c.Response, c.Request, filePath)
+	http.ServeFile(c.Response.streamTo(), c.Request, filePath)
 	return nil
 }
 
@@ -107,8 +107,7 @@ func (c *Ctx) StreamFile(filePath string) error {
 		fmt.Println(err)
 		return c.SendStatus(http.StatusInternalServerError)
 	}
-	modTime := fileInfo.ModTime()
 
-	http.ServeContent(c.Response.ResponseWriter, c.Request, filePath, modTime, file)
+	http.ServeContent(c.Response.streamTo(), c.Request, filePath, fileInfo.ModTime(), file)
 	return nil
 }

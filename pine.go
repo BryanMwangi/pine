@@ -35,17 +35,23 @@ type Ctx struct {
 	Method       string                      // HTTP method
 	BaseURI      string                      // HTTP base uri
 	Request      *http.Request               // HTTP request
-	Response     *responseWriterWrapper      // HTTP response writer
+	Response     *Response                   // HTTP response (buffered until commit)
 	params       map[string]string           // URL parameters
 	locals       map[interface{}]interface{} // Local variables
 	indexHandler int                         // Index of the handler
 	route        *Route                      // HTTP route
 }
 
-type responseWriterWrapper struct {
-	http.ResponseWriter
-	statusCode int
-	body       []byte
+// Response buffers the HTTP response until all handlers and middleware have
+// unwound. Streaming methods (SendFile, StreamFile) bypass buffering by
+// calling streamTo() which marks the response committed immediately.
+type Response struct {
+	writer      http.ResponseWriter
+	status      int
+	contentType string
+	body        any
+	committed   bool
+	size        int
 }
 
 type Server struct {
@@ -70,6 +76,11 @@ type Server struct {
 
 	// views is the configured template engine (nil until SetEngine() is called).
 	views ViewEngine
+
+	// Pre-wrapped fallback handlers rebuilt by rebuildFallbacks() so that
+	// global middleware fires even on unmatched routes — zero per-request cost.
+	notFoundHandler         Handler
+	methodNotAllowedHandler Handler
 }
 
 // Config is a struct holding the server settings.
@@ -344,6 +355,7 @@ func (server *Server) Start(address string) error {
 
 	server.server = httpServer
 	server.server.SetKeepAlivesEnabled(!server.config.DisableKeepAlive)
+	server.rebuildFallbacks()
 
 	if server.config.TLSConfig.ServeTLS {
 		if server.config.TLSConfig.CertFile == "" || server.config.TLSConfig.KeyFile == "" {
@@ -355,14 +367,13 @@ func (server *Server) Start(address string) error {
 }
 
 func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	wrappedWriter := &responseWriterWrapper{ResponseWriter: w}
-
+	resp := &Response{writer: w}
 	ctx := &Ctx{
 		Server:   server,
 		Method:   r.Method,
 		BaseURI:  r.URL.Path,
 		Request:  r,
-		Response: wrappedWriter,
+		Response: resp,
 		params:   make(map[string]string),
 	}
 
@@ -374,12 +385,26 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		// Check if the path exists under a different method (→ 405).
-		if _, _, exists := server.router.SearchAnyMethod(r.URL.Path); exists {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		pathExists := func() bool {
+			_, _, exists := server.router.SearchAnyMethod(r.URL.Path)
+			return exists
+		}
+		// Fallback handlers are built by Start(). If ServeHTTP is called
+		// directly (e.g. in tests) they may be nil; use stdlib defaults then.
+		if server.notFoundHandler == nil {
+			if pathExists() {
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			} else {
+				http.NotFound(w, r)
+			}
 			return
 		}
-		http.NotFound(w, r)
+		h := server.notFoundHandler
+		if pathExists() {
+			h = server.methodNotAllowedHandler
+		}
+		_ = h(ctx)
+		_ = resp.commit(server.config.JSONEncoder)
 		return
 	}
 
@@ -388,10 +413,13 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	for _, handler := range handlers {
 		if err := handler(ctx); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			resp.status = http.StatusInternalServerError
+			resp.body = err.Error()
+			resp.contentType = "text/plain; charset=utf-8"
+			break
 		}
 	}
+	_ = resp.commit(server.config.JSONEncoder)
 }
 
 func (server *Server) limitMaxRequestBodySize(w http.ResponseWriter, r *http.Request) {
@@ -411,6 +439,26 @@ func (server *Server) Use(middleware Middleware) {
 	for _, route := range server.routes {
 		server.router.Insert(route.Method, route.Path, server.wrapHandlers(route.Handlers))
 	}
+}
+
+// rebuildFallbacks pre-wraps the 404 and 405 handlers with global middleware
+// so that middleware (e.g. request loggers) runs even on unmatched routes.
+// Called once from Start() after all middleware has been registered.
+func (server *Server) rebuildFallbacks() {
+	notFound := func(c *Ctx) error {
+		c.Response.status = http.StatusNotFound
+		c.Response.body = "404 page not found\n"
+		c.Response.contentType = "text/plain; charset=utf-8"
+		return nil
+	}
+	methodNotAllowed := func(c *Ctx) error {
+		c.Response.status = http.StatusMethodNotAllowed
+		c.Response.body = "Method Not Allowed\n"
+		c.Response.contentType = "text/plain; charset=utf-8"
+		return nil
+	}
+	server.notFoundHandler = server.wrapHandlers([]Handler{notFound})[0]
+	server.methodNotAllowedHandler = server.wrapHandlers([]Handler{methodNotAllowed})[0]
 }
 
 // wrapHandlers applies all registered middleware to a handler slice.
@@ -615,38 +663,42 @@ func (c *Ctx) Query(key string) string {
 	return c.Request.URL.Query().Get(key)
 }
 
-// JSON encodes data as JSON and writes it to the response.
+// JSON stages a JSON response. The body is encoded and written to the wire
+// only after all handlers and middleware have returned.
 func (c *Ctx) JSON(data interface{}, status ...int) error {
-	raw, err := c.Server.config.JSONEncoder(data)
-	if err != nil {
-		return err
-	}
-	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.contentType = "application/json"
+	c.Response.body = data
 	if len(status) > 0 {
-		c.Response.WriteHeader(status[0])
-	} else {
-		c.Response.WriteHeader(http.StatusOK)
+		c.Response.status = status[0]
+	} else if c.Response.status == 0 {
+		c.Response.status = http.StatusOK
 	}
-	c.Response.Write(raw)
 	return nil
 }
 
-// Status sets the HTTP response status code.
+// Status stages the HTTP response status code.
 func (c *Ctx) Status(status int) *Ctx {
-	c.Response.WriteHeader(status)
+	c.Response.status = status
 	return c
 }
 
-// Set sets a response header.
+// Set sets a response header. Safe to call before or after Status/JSON.
 func (c *Ctx) Set(key string, val interface{}) *Ctx {
-	c.Response.SetHeader(key, fmt.Sprint(val))
+	c.Response.Header().Set(key, fmt.Sprint(val))
 	return c
 }
 
-// SendString writes a plain-text string to the response.
+// SendString appends a plain-text segment to the response body.
+// Multiple calls accumulate — each segment is appended to whatever was
+// written before, so middleware can prepend before calling next(c) and the
+// handler's write is concatenated rather than lost.
 func (c *Ctx) SendString(body string) error {
-	c.Response.Write([]byte(body))
-	return nil
+	c.Response.contentType = "text/plain; charset=utf-8"
+	if c.Response.status == 0 {
+		c.Response.status = http.StatusOK
+	}
+	_, err := c.Response.Write([]byte(body))
+	return err
 }
 
 // StatusMessage returns the text for a given HTTP status code.
@@ -657,12 +709,18 @@ func StatusMessage(status int) string {
 	return http.StatusText(status)
 }
 
-// SendStatus writes the status code and its text body.
+// SendStatus stages the status code. For codes that permit a body (everything
+// except 1xx, 204, and 304) the standard IANA status text is also set so that
+// clients get a readable plain-text reply. RFC 9110 prohibits a message body
+// for the excluded codes, so Pine omits it to match what the wire will carry.
 func (c *Ctx) SendStatus(status int) error {
-	c.Response.WriteHeader(status)
-	if c.Response.statusCode == status && c.Response.BodyLen() == 0 {
-		return c.SendString(http.StatusText(status))
+	c.Response.status = status
+	if status == http.StatusNoContent || status == http.StatusNotModified ||
+		(status >= 100 && status < 200) {
+		return nil
 	}
+	c.Response.contentType = "text/plain; charset=utf-8"
+	c.Response.body = http.StatusText(status)
 	return nil
 }
 
@@ -724,10 +782,10 @@ func (c *Ctx) Render(name string, data interface{}, status ...int) error {
 		return err
 	}
 
-	c.Response.Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.Response.WriteHeader(code)
-	_, err := c.Response.Write(buf.Bytes())
-	return err
+	c.Response.contentType = "text/html; charset=utf-8"
+	c.Response.status = code
+	c.Response.body = buf.Bytes()
+	return nil
 }
 
 // ServeShutDown gracefully shuts the server down.
@@ -742,22 +800,102 @@ func (server *Server) ServeShutDown(ctx context.Context, hooks ...func()) error 
 	return server.server.Shutdown(ctx)
 }
 
-func (rw *responseWriterWrapper) WriteHeader(statusCode int) {
-	if rw.statusCode == 0 {
-		rw.statusCode = statusCode
-		rw.ResponseWriter.WriteHeader(statusCode)
+// Header returns the underlying response header map.
+// Writes here are staged until commit — they do not flush to the wire early.
+func (r *Response) Header() http.Header {
+	return r.writer.Header()
+}
+
+// WriteHeader stores the status code without committing to the wire.
+// Implements http.ResponseWriter so *Response can be passed where one is needed.
+func (r *Response) WriteHeader(code int) {
+	if r.status == 0 {
+		r.status = code
 	}
 }
 
-func (rw *responseWriterWrapper) SetHeader(key, val string) {
-	rw.ResponseWriter.Header().Set(key, val)
+// Write buffers bytes to be sent at commit time.
+// If the response is already committed (streaming), bytes go directly to the wire.
+// Implements http.ResponseWriter so *Response can be passed where one is needed.
+func (r *Response) Write(b []byte) (int, error) {
+	if r.committed {
+		return r.writer.Write(b)
+	}
+	if existing, ok := r.body.([]byte); ok {
+		r.body = append(existing, b...)
+	} else {
+		r.body = append([]byte(nil), b...)
+	}
+	return len(b), nil
 }
 
-func (rw *responseWriterWrapper) Write(data []byte) (int, error) {
-	rw.body = append(rw.body, data...)
-	return rw.ResponseWriter.Write(data)
+// Committed reports whether the response has already been written to the wire.
+func (r *Response) Committed() bool { return r.committed }
+
+// StatusCode returns the staged status code (0 if not yet set).
+func (r *Response) StatusCode() int { return r.status }
+
+// ContentType returns the staged Content-Type value.
+func (r *Response) ContentType() string { return r.contentType }
+
+// Body returns the buffered response body.
+func (r *Response) Body() any { return r.body }
+
+// SetBody replaces the buffered body. Use in middleware after next(c) to wrap
+// or rewrite the handler's output before it is committed.
+func (r *Response) SetBody(v any) { r.body = v }
+
+// Size returns the number of bytes written to the wire (set at commit time).
+func (r *Response) Size() int { return r.size }
+
+// Unwrap marks the response committed and returns the underlying http.ResponseWriter.
+// Use this when a protocol upgrade (WebSocket, SSE) or streaming operation must
+// write directly to the wire. After Unwrap, ServeHTTP's buffered commit is a no-op.
+func (r *Response) Unwrap() http.ResponseWriter {
+	r.committed = true
+	return r.writer
 }
 
-func (rw *responseWriterWrapper) BodyLen() int {
-	return len(rw.body)
+// streamTo is the package-internal alias used by SendFile and StreamFile.
+func (r *Response) streamTo() http.ResponseWriter { return r.Unwrap() }
+
+// commit writes the buffered response to the wire exactly once.
+// Subsequent calls (e.g. if a streaming method already committed) are no-ops.
+func (r *Response) commit(encode JSONMarshal) error {
+	if r.committed {
+		return nil
+	}
+	r.committed = true
+
+	var encoded []byte
+	switch v := r.body.(type) {
+	case nil:
+		// no body
+	case []byte:
+		encoded = v
+	case string:
+		encoded = []byte(v)
+	default:
+		var err error
+		encoded, err = encode(v)
+		if err != nil {
+			return err
+		}
+	}
+
+	status := r.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+
+	if r.contentType != "" {
+		r.writer.Header().Set("Content-Type", r.contentType)
+	}
+	r.writer.WriteHeader(status)
+	if len(encoded) > 0 {
+		n, err := r.writer.Write(encoded)
+		r.size = n
+		return err
+	}
+	return nil
 }

@@ -136,7 +136,7 @@ func New(handler func(conn *Conn, ctx *pine.Ctx), config ...Config) pine.Handler
 	}
 
 	return func(ctx *pine.Ctx) error {
-		Conn, err := upgrader.Upgrade(ctx.Response.ResponseWriter, ctx.Request, ctx.Response.Header())
+		Conn, err := upgrader.Upgrade(ctx.Response.Unwrap(), ctx.Request, ctx.Response.Header())
 		if err != nil {
 			fmt.Println(err)
 			return err

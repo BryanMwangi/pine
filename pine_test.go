@@ -13,11 +13,7 @@ func Mock_Ctx() *Ctx {
 		params: map[string]string{"id": "42"},
 	}
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/?query=queryValue", nil)
-	ctx.Response = &responseWriterWrapper{
-		httptest.NewRecorder(),
-		0,
-		nil,
-	}
+	ctx.Response = &Response{writer: httptest.NewRecorder()}
 	return &ctx
 }
 func TestNewServer_DefaultConfig(t *testing.T) {
@@ -527,7 +523,7 @@ func TestReadCookie(t *testing.T) {
 
 func TestSetCookie_MultipleCookies_SeparateHeaders(t *testing.T) {
 	rr := httptest.NewRecorder()
-	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+	ctx := &Ctx{Response: &Response{writer: rr}}
 
 	ctx.SetCookie(
 		Cookie{Name: "session", Value: "abc"},
@@ -553,7 +549,7 @@ func TestSetCookie_MultipleCookies_SeparateHeaders(t *testing.T) {
 
 func TestDeleteCookie_SetsMaxAgeNegativeOne(t *testing.T) {
 	rr := httptest.NewRecorder()
-	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+	ctx := &Ctx{Response: &Response{writer: rr}}
 
 	ctx.DeleteCookie("session")
 
@@ -568,7 +564,7 @@ func TestDeleteCookie_SetsMaxAgeNegativeOne(t *testing.T) {
 
 func TestSetCookie_SameSiteLax(t *testing.T) {
 	rr := httptest.NewRecorder()
-	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+	ctx := &Ctx{Response: &Response{writer: rr}}
 
 	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteLax})
 
@@ -580,7 +576,7 @@ func TestSetCookie_SameSiteLax(t *testing.T) {
 
 func TestSetCookie_SameSiteStrict(t *testing.T) {
 	rr := httptest.NewRecorder()
-	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+	ctx := &Ctx{Response: &Response{writer: rr}}
 
 	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteStrict})
 
@@ -592,7 +588,7 @@ func TestSetCookie_SameSiteStrict(t *testing.T) {
 
 func TestSetCookie_SameSiteUnset_OmitsDirective(t *testing.T) {
 	rr := httptest.NewRecorder()
-	ctx := &Ctx{Response: &responseWriterWrapper{ResponseWriter: rr}}
+	ctx := &Ctx{Response: &Response{writer: rr}}
 
 	ctx.SetCookie(Cookie{Name: "tok", Value: "v", SameSite: SameSiteUnset})
 
@@ -615,6 +611,4 @@ func containsSubstr(s, sub string) bool {
 	return false
 }
 
-// TODO: Add tests involving responseWriterWrapper. As of now, such tests cannot
-// be verified as I have not figured out how to mock the responseWriterWrapper.
-// If you have any ideas, please feel free to share them.
+// TODO: Add more tests for Response methods and middleware post-next inspection.
