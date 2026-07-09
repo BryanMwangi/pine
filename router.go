@@ -6,12 +6,13 @@ import "strings"
 // Children are looked up by the first byte of their path segment.
 // Priority for matching: static children first, then paramChild, then wildcard.
 type node struct {
-	path      string             // static path segment stored at this node
-	children  map[byte]*node     // static children keyed by first byte of segment
-	paramChild *node             // handles :param segments
-	wildcard  *node              // handles /* catch-all
-	handlers  map[string][]Handler // method → handler slice (at leaf nodes)
-	paramNames []string          // param names accumulated from root to this node
+	path       string               // static path segment stored at this node
+	children   map[byte]*node       // static children keyed by first byte of segment
+	paramChild *node                // handles :param segments
+	wildcard   *node                // handles /* catch-all
+	handlers   map[string][]Handler // method → handler slice (at leaf nodes)
+	paramNames []string             // param names accumulated from root to this node
+	pattern    string               // original registered route pattern, e.g. "/users/:id"
 }
 
 // Router is a radix-tree HTTP router.
@@ -31,16 +32,17 @@ func (r *Router) Insert(method, path string, handlers []Handler) {
 	if path == "" {
 		path = "/"
 	}
+	pattern := path // preserve the original pattern before stripping
 	// Trim leading slash so we work with the suffix only.
 	if path[0] == '/' {
 		path = path[1:]
 	}
-	r.root.insert(method, path, handlers, nil)
+	r.root.insert(method, path, handlers, nil, pattern)
 }
 
 // Search finds the handlers registered for method+path.
 // Returns (handlers, params, found).
-func (r *Router) Search(method, path string) ([]Handler, map[string]string, bool) {
+func (r *Router) Search(method, path string) ([]Handler, map[string]string, string, bool) {
 	if path == "" {
 		path = "/"
 	}
@@ -52,7 +54,7 @@ func (r *Router) Search(method, path string) ([]Handler, map[string]string, bool
 
 // SearchAnyMethod returns handlers for path regardless of method.
 // Used for OPTIONS / CORS preflight fallback.
-func (r *Router) SearchAnyMethod(path string) ([]Handler, map[string]string, bool) {
+func (r *Router) SearchAnyMethod(path string) ([]Handler, map[string]string, string, bool) {
 	if path == "" {
 		path = "/"
 	}
@@ -63,7 +65,9 @@ func (r *Router) SearchAnyMethod(path string) ([]Handler, map[string]string, boo
 }
 
 // insert walks the tree and registers handlers at the terminal node.
-func (n *node) insert(method, path string, handlers []Handler, paramNames []string) {
+// pattern is the original full route path (e.g. "/users/:id") stored at the leaf
+// so Search can return it for use in middleware metrics and logging.
+func (n *node) insert(method, path string, handlers []Handler, paramNames []string, pattern string) {
 	// Reached the end of the path — this is the leaf.
 	if path == "" {
 		if n.handlers == nil {
@@ -71,6 +75,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 		}
 		n.handlers[method] = handlers
 		n.paramNames = paramNames
+		n.pattern = pattern
 		return
 	}
 
@@ -79,7 +84,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 
 	if seg == "" {
 		// Consecutive or trailing slash — skip and continue.
-		n.insert(method, rest, handlers, paramNames)
+		n.insert(method, rest, handlers, paramNames, pattern)
 		return
 	}
 
@@ -92,7 +97,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 		if n.paramChild == nil {
 			n.paramChild = &node{}
 		}
-		n.paramChild.insert(method, rest, handlers, append(paramNames, paramName))
+		n.paramChild.insert(method, rest, handlers, append(paramNames, paramName), pattern)
 
 	case '*':
 		// Catch-all wildcard. Remaining path captured as one param.
@@ -108,6 +113,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 		}
 		n.wildcard.handlers[method] = handlers
 		n.wildcard.paramNames = append(paramNames, paramName)
+		n.wildcard.pattern = pattern
 
 	default:
 		// Static segment.
@@ -118,7 +124,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 		if !ok {
 			child = &node{path: seg}
 			n.children[firstByte] = child
-			child.insert(method, rest, handlers, paramNames)
+			child.insert(method, rest, handlers, paramNames, pattern)
 			return
 		}
 
@@ -127,7 +133,7 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 
 		if lcp == len(child.path) {
 			// Existing child covers our prefix — consume it and keep going.
-			child.insert(method, strings.TrimPrefix(seg, child.path)+segSep(rest), handlers, paramNames)
+			child.insert(method, strings.TrimPrefix(seg, child.path)+segSep(rest), handlers, paramNames, pattern)
 			return
 		}
 
@@ -142,21 +148,21 @@ func (n *node) insert(method, path string, handlers []Handler, paramNames []stri
 		// Now insert the new route into the split node.
 		remainingNew := seg[lcp:]
 		if remainingNew == "" {
-			split.insert(method, rest, handlers, paramNames)
+			split.insert(method, rest, handlers, paramNames, pattern)
 		} else {
-			split.insert(method, remainingNew+segSep(rest), handlers, paramNames)
+			split.insert(method, remainingNew+segSep(rest), handlers, paramNames, pattern)
 		}
 	}
 }
 
-// search walks the tree and returns matching handlers + captured params.
-func (n *node) search(method, path string, captured []string) ([]Handler, map[string]string, bool) {
+// search walks the tree and returns matching handlers + captured params + route pattern.
+func (n *node) search(method, path string, captured []string) ([]Handler, map[string]string, string, bool) {
 	// End of path — check for a handler at this leaf.
 	if path == "" {
 		if h, ok := n.handlers[method]; ok {
-			return h, buildParams(n.paramNames, captured), true
+			return h, buildParams(n.paramNames, captured), n.pattern, true
 		}
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	seg, rest := nextSegment(path)
@@ -164,7 +170,7 @@ func (n *node) search(method, path string, captured []string) ([]Handler, map[st
 	if seg == "" {
 		// An empty segment means consecutive slashes in the request path.
 		// No registered route can match this, so return not-found.
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	firstByte := seg[0]
@@ -175,13 +181,13 @@ func (n *node) search(method, path string, captured []string) ([]Handler, map[st
 			if strings.HasPrefix(seg, child.path) {
 				remainder := seg[len(child.path):]
 				if remainder == "" {
-					if h, pm, found := child.search(method, rest, captured); found {
-						return h, pm, true
+					if h, pm, body, found := child.search(method, rest, captured); found {
+						return h, pm, body, true
 					}
 				} else {
 					// The segment is longer than child.path — try descending.
-					if h, pm, found := child.search(method, remainder+segSep(rest), captured); found {
-						return h, pm, true
+					if h, pm, body, found := child.search(method, remainder+segSep(rest), captured); found {
+						return h, pm, body, true
 					}
 				}
 			}
@@ -190,8 +196,8 @@ func (n *node) search(method, path string, captured []string) ([]Handler, map[st
 
 	// 2. Try parametric child.
 	if n.paramChild != nil && len(seg) > 0 {
-		if h, pm, found := n.paramChild.search(method, rest, append(captured, seg)); found {
-			return h, pm, true
+		if h, pm, body, found := n.paramChild.search(method, rest, append(captured, seg)); found {
+			return h, pm, body, true
 		}
 	}
 
@@ -199,25 +205,25 @@ func (n *node) search(method, path string, captured []string) ([]Handler, map[st
 	if n.wildcard != nil {
 		if h, ok := n.wildcard.handlers[method]; ok {
 			remaining := path
-			return h, buildParams(n.wildcard.paramNames, append(captured, remaining)), true
+			return h, buildParams(n.wildcard.paramNames, append(captured, remaining)), n.wildcard.pattern, true
 		}
 	}
 
-	return nil, nil, false
+	return nil, nil, "", false
 }
 
 // searchAnyMethod matches any registered method for OPTIONS/CORS fallback.
-func (n *node) searchAnyMethod(path string, captured []string) ([]Handler, map[string]string, bool) {
+func (n *node) searchAnyMethod(path string, captured []string) ([]Handler, map[string]string, string, bool) {
 	if path == "" {
 		for _, h := range n.handlers {
-			return h, buildParams(n.paramNames, captured), true
+			return h, buildParams(n.paramNames, captured), n.pattern, true
 		}
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	seg, rest := nextSegment(path)
 	if seg == "" {
-		return nil, nil, false
+		return nil, nil, "", false
 	}
 
 	firstByte := seg[0]
@@ -226,30 +232,30 @@ func (n *node) searchAnyMethod(path string, captured []string) ([]Handler, map[s
 		if child, ok := n.children[firstByte]; ok && strings.HasPrefix(seg, child.path) {
 			remainder := seg[len(child.path):]
 			if remainder == "" {
-				if h, pm, found := child.searchAnyMethod(rest, captured); found {
-					return h, pm, true
+				if h, pm, body, found := child.searchAnyMethod(rest, captured); found {
+					return h, pm, body, true
 				}
 			} else {
-				if h, pm, found := child.searchAnyMethod(remainder+segSep(rest), captured); found {
-					return h, pm, true
+				if h, pm, body, found := child.searchAnyMethod(remainder+segSep(rest), captured); found {
+					return h, pm, body, true
 				}
 			}
 		}
 	}
 
 	if n.paramChild != nil && len(seg) > 0 {
-		if h, pm, found := n.paramChild.searchAnyMethod(rest, append(captured, seg)); found {
-			return h, pm, true
+		if h, pm, body, found := n.paramChild.searchAnyMethod(rest, append(captured, seg)); found {
+			return h, pm, body, true
 		}
 	}
 
 	if n.wildcard != nil {
 		for _, h := range n.wildcard.handlers {
-			return h, buildParams(n.wildcard.paramNames, append(captured, path)), true
+			return h, buildParams(n.wildcard.paramNames, append(captured, path)), n.wildcard.pattern, true
 		}
 	}
 
-	return nil, nil, false
+	return nil, nil, "", false
 }
 
 // nextSegment splits path at the first '/' returning (segment, remainder).

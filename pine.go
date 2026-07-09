@@ -377,16 +377,16 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		params:   make(map[string]string),
 	}
 
-	handlers, params, found := server.router.Search(r.Method, r.URL.Path)
+	handlers, params, pattern, found := server.router.Search(r.Method, r.URL.Path)
 
 	if !found && r.Method == MethodOptions {
 		// CORS preflight: find handlers registered under any method for this path.
-		handlers, params, found = server.router.SearchAnyMethod(r.URL.Path)
+		handlers, params, pattern, found = server.router.SearchAnyMethod(r.URL.Path)
 	}
 
 	if !found {
 		pathExists := func() bool {
-			_, _, exists := server.router.SearchAnyMethod(r.URL.Path)
+			_, _, _, exists := server.router.SearchAnyMethod(r.URL.Path)
 			return exists
 		}
 		// Fallback handlers are built by Start(). If ServeHTTP is called
@@ -409,6 +409,7 @@ func (server *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx.params = params
+	ctx.route = &Route{Method: r.Method, Path: pattern}
 	server.limitMaxRequestBodySize(w, r)
 
 	for _, handler := range handlers {
@@ -647,6 +648,20 @@ func (c *Ctx) Locals(key string, value ...interface{}) interface{} {
 // Params returns the URL parameter for key.
 func (c *Ctx) Params(key string) string {
 	return c.params[key]
+}
+
+func (c *Ctx) Route() Route {
+	return *c.route
+}
+
+// RoutePath returns the registered route pattern that matched this request,
+// e.g. "/users/:id". Use this in middleware for low-cardinality metric labels
+// instead of the raw BaseURI which contains actual parameter values.
+func (c *Ctx) RoutePath() string {
+	if c.route == nil {
+		return ""
+	}
+	return c.route.Path
 }
 
 // ParamsInt returns the URL parameter converted to int.

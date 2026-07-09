@@ -25,7 +25,7 @@ func TestRouter_Static_ExactMatch(t *testing.T) {
 	r := newTestRouter()
 	insertRoute(r, "GET", "/hello")
 
-	h, params, found := r.Search("GET", "/hello")
+	h, params, _, found := r.Search("GET", "/hello")
 	if !found {
 		t.Fatal("expected to find /hello")
 	}
@@ -41,7 +41,7 @@ func TestRouter_Static_NoFalsePositive(t *testing.T) {
 	r := newTestRouter()
 	insertRoute(r, "GET", "/hello")
 
-	_, _, found := r.Search("GET", "/world")
+	_, _, _, found := r.Search("GET", "/world")
 	if found {
 		t.Error("/world should not match /hello")
 	}
@@ -51,7 +51,7 @@ func TestRouter_Root(t *testing.T) {
 	r := newTestRouter()
 	insertRoute(r, "GET", "/")
 
-	_, _, found := r.Search("GET", "/")
+	_, _, _, found := r.Search("GET", "/")
 	if !found {
 		t.Fatal("expected to find root /")
 	}
@@ -61,7 +61,7 @@ func TestRouter_SingleParam(t *testing.T) {
 	r := newTestRouter()
 	r.Insert("GET", "/user/:id", []Handler{func(c *Ctx) error { return nil }})
 
-	_, params, found := r.Search("GET", "/user/42")
+	_, params, _, found := r.Search("GET", "/user/42")
 	if !found {
 		t.Fatal("expected match")
 	}
@@ -74,7 +74,7 @@ func TestRouter_MultipleParams(t *testing.T) {
 	r := newTestRouter()
 	r.Insert("GET", "/user/:id/post/:postId", []Handler{func(c *Ctx) error { return nil }})
 
-	_, params, found := r.Search("GET", "/user/7/post/99")
+	_, params, _, found := r.Search("GET", "/user/7/post/99")
 	if !found {
 		t.Fatal("expected match")
 	}
@@ -90,7 +90,7 @@ func TestRouter_DeepNesting(t *testing.T) {
 	r := newTestRouter()
 	r.Insert("GET", "/a/b/c/d/e/:f", []Handler{func(c *Ctx) error { return nil }})
 
-	_, params, found := r.Search("GET", "/a/b/c/d/e/leaf")
+	_, params, _, found := r.Search("GET", "/a/b/c/d/e/leaf")
 	if !found {
 		t.Fatal("expected match on deep nesting")
 	}
@@ -104,7 +104,7 @@ func TestRouter_Wildcard(t *testing.T) {
 	r.Insert("GET", "/*", []Handler{func(c *Ctx) error { return nil }})
 
 	for _, path := range []string{"/anything", "/a/b/c", "/foo/bar/baz"} {
-		_, _, found := r.Search("GET", path)
+		_, _, _, found := r.Search("GET", path)
 		if !found {
 			t.Errorf("wildcard /* should match %s", path)
 		}
@@ -117,7 +117,7 @@ func TestRouter_StaticBeatsParam(t *testing.T) {
 	r.Insert("GET", "/user/profile", []Handler{func(c *Ctx) error { staticCalled = true; return nil }})
 	r.Insert("GET", "/user/:id", []Handler{func(c *Ctx) error { paramCalled = true; return nil }})
 
-	h, _, found := r.Search("GET", "/user/profile")
+	h, _, _, found := r.Search("GET", "/user/profile")
 	if !found {
 		t.Fatal("expected match")
 	}
@@ -142,14 +142,14 @@ func TestRouter_MethodIsolation(t *testing.T) {
 	insertRoute(r, "DELETE", "/res")
 
 	for _, method := range []string{"GET", "POST", "DELETE"} {
-		_, _, found := r.Search(method, "/res")
+		_, _, _, found := r.Search(method, "/res")
 		if !found {
 			t.Errorf("expected to find %s /res", method)
 		}
 	}
 
 	// Wrong method — path exists but wrong method → not found at router level.
-	_, _, found := r.Search("PUT", "/res")
+	_, _, _, found := r.Search("PUT", "/res")
 	if found {
 		t.Error("PUT /res should not be found (not registered)")
 	}
@@ -159,11 +159,11 @@ func TestRouter_SearchAnyMethod(t *testing.T) {
 	r := newTestRouter()
 	insertRoute(r, "GET", "/data")
 
-	_, _, found := r.SearchAnyMethod("/data")
+	_, _, _, found := r.SearchAnyMethod("/data")
 	if !found {
 		t.Error("SearchAnyMethod should find /data registered under GET")
 	}
-	_, _, found = r.SearchAnyMethod("/unknown")
+	_, _, _, found = r.SearchAnyMethod("/unknown")
 	if found {
 		t.Error("SearchAnyMethod should not find unregistered path")
 	}
@@ -183,7 +183,7 @@ func TestRouter_ConsecutiveSlashes_NoPanic(t *testing.T) {
 		}
 	}()
 
-	_, _, found := r.Search("GET", "//api/v1")
+	_, _, _, found := r.Search("GET", "//api/v1")
 	if found {
 		t.Error("//api/v1 should not match /api/v1")
 	}
@@ -199,14 +199,14 @@ func TestRouter_EmptyPath_NoPanic(t *testing.T) {
 		}
 	}()
 
-	_, _, _ = r.Search("GET", "")
+	_, _, _, _ = r.Search("GET", "")
 }
 
 func TestRouter_TrailingSlash(t *testing.T) {
 	r := newTestRouter()
 	insertRoute(r, "GET", "/path")
 
-	_, _, found := r.Search("GET", "/path")
+	_, _, _, found := r.Search("GET", "/path")
 	if !found {
 		t.Error("expected /path to match")
 	}
@@ -226,7 +226,7 @@ func TestRouter_ManyRoutes(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		path := fmt.Sprintf("/route/%d", i)
-		_, _, found := r.Search("GET", path)
+		_, _, _, found := r.Search("GET", path)
 		if !found {
 			t.Errorf("expected to find %s", path)
 		}
